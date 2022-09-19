@@ -258,16 +258,21 @@ createDatabaseDataSource <- function(connection,
 initializeEnvironment <- function(shinySettings,
                                   table1SpecPath = "data/Table1SpecsLong.csv",
                                   dataModelSpecificationsPath = "data/resultsDataModelSpecification.csv",
+                                  connectionPool = NULL,
                                   envir = .GlobalEnv) {
   envir$shinySettings <- shinySettings
 
-  envir$connectionPool <- getConnectionPool(envir$shinySettings$connectionDetails)
-  shiny::onStop(function() {
-    if (DBI::dbIsValid(envir$connectionPool)) {
-      writeLines("Closing database pool")
-      pool::poolClose(envir$connectionPool)
-    }
-  })
+  envir$connectionPool <- connectionPool
+  if (is.null(envir$connectionPool)) {
+    envir$connectionPool <- getConnectionPool(envir$shinySettings$connectionDetails)
+    shiny::onStop(function() {
+      if (DBI::dbIsValid(envir$connectionPool)) {
+        writeLines("Closing database pool")
+        pool::poolClose(envir$connectionPool)
+      }
+    })
+  }
+
 
   envir$dataSource <-
     createDatabaseDataSource(
@@ -409,8 +414,8 @@ initializeEnvironment <- function(shinySettings,
       sort()
   }
 
-  envir$resultsTables <- tolower(DatabaseConnector::dbListTables(dataSource$connection,
-                                                                 schema = dataSource$resultsDatabaseSchema))
+  envir$resultsTables <- tolower(DatabaseConnector::dbListTables(envir$dataSource$connection,
+                                                                 schema = envir$dataSource$resultsDatabaseSchema))
   envir$enabledTabs <- c()
   for (table in envir$dataModelSpecifications$tableName %>% unique()) {
     if (envir$dataSource$prefixTable(table) %in% envir$resultsTables) {
