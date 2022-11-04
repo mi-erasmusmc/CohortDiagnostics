@@ -235,3 +235,4 @@ vocabulary,vocabulary_name,varchar(255),Yes,No,No,Yes,No,Yes,No
 vocabulary,vocabulary_reference,varchar,No,No,No,Yes,No,Yes,No
 vocabulary,vocabulary_version,varchar,No,No,No,Yes,No,Yes,No
 vocabulary,vocabulary_concept_id,bigint,Yes,No,No,Yes,No,Yes,No
+package_version,version_number,int,Yes,Yes,No,No,No,No,No

@@ -342,20 +342,6 @@ CREATE TABLE @results_schema.@included_source_concept (
 			PRIMARY KEY(database_id, cohort_id, concept_set_id, concept_id, source_concept_id)
 );
 
---Table inclusion_rule_stats
---HINT DISTRIBUTE ON RANDOM
-CREATE TABLE @results_schema.@inclusion_rule_stats (
-			rule_sequence_id INT NOT NULL,
-			rule_name VARCHAR NOT NULL,
-			meet_subjects BIGINT NOT NULL,
-			gain_subjects BIGINT NOT NULL,
-			total_subjects BIGINT NOT NULL,
-			remain_subjects BIGINT NOT NULL,
-			cohort_id BIGINT NOT NULL,
-			database_id VARCHAR NOT NULL,
-			PRIMARY KEY(rule_sequence_id, cohort_id, database_id)
-);
-
 --Table index_event_breakdown
 --HINT DISTRIBUTE ON RANDOM
 CREATE TABLE @results_schema.@index_event_breakdown (

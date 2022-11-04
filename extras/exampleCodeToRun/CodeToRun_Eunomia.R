@@ -28,7 +28,7 @@ cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = "cohortEun
 
 # output folder information ----
 outputFolder <-
-  file.path("D:", "temp", "outputFolder", studyName, "eunomia")
+  file.path(tempdir(), "outputFolder", studyName, "eunomia")
 ## optionally delete previous execution ----
 unlink(x = outputFolder,
        recursive = TRUE,
