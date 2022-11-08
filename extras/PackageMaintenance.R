@@ -19,6 +19,7 @@
 # Format and check code
 OhdsiRTools::checkUsagePackage("CohortDiagnostics")
 OhdsiRTools::updateCopyrightYearFolder()
+styler::style_pkg()
 devtools::spell_check()
 spelling::spell_check_files(list.files(path = "inst/shiny", pattern = "*.html", recursive = TRUE, full.names = TRUE))
 
@@ -64,7 +65,21 @@ text <- gsub(patternRep, paste0('appVersionNum <- "', version, '"'), text)
 writeLines(text, con = file(filePath))
 
 
+version <- gsub("Version: ", "", version)
+filePath <- file.path("inst", "sql", "sql_server", "migrations", "UpdateVersionNumber.sql")
+text <- readChar(filePath, file.info(filePath)$size)
+patternRep <- "\\{DEFAULT @version_number = '(\\d+\\.\\d+\\.\\d+)'\\}"
+text <- gsub(patternRep, paste0("\\{DEFAULT @version_number = '", version, "'\\}"), text)
+writeLines(text, con = file(filePath))
+
+
 # Copy data model specs to Shiny app
 file.copy(from = "inst/settings/resultsDataModelSpecification.csv", 
-          to = "inst/shiny/DiagnosticsExplorer/resultsDataModelSpecification.csv",
+          to = "inst/shiny/DiagnosticsExplorer/data/resultsDataModelSpecification.csv",
+          overwrite = TRUE)
+
+
+# Copy shared script
+file.copy(from = "R/Shared.R", 
+          to = "inst/shiny/DiagnosticsExplorer/R/Shared.R",
           overwrite = TRUE)

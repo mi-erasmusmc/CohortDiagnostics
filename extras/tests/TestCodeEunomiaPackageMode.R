@@ -1,4 +1,4 @@
-# remotes::install_github('OHDSI/SkeletonCohortDiagnosticsStudy')
+remotes::install_github('OHDSI/SkeletonCohortDiagnosticsStudy', ref = "develop")
 # remotes::install_github('OHDSI/Eunomia')
 
 library(CohortDiagnostics)
@@ -24,10 +24,11 @@ execute(
   outputFolder = outputFolder,
   databaseId = "Eunomia",
   databaseName = "Eunomia Test",
-  databaseDescription = "This is a test data base called Eunomia"
+  databaseDescription = "This is a test data base called Eunomia", 
+  verifyDependencies = FALSE
 )
 
-CohortDiagnostics::preMergeDiagnosticsFiles(dataFolder = outputFolder)
+CohortDiagnostics::createResultsDataModel(dataFolder = outputFolder)
 
 
 
@@ -41,7 +42,7 @@ connectionDetailsToUpload <- createConnectionDetails(dbms = "postgresql",
 
 
 resultsSchema <- "eunomiaCd"
-createResultsDataModel(connectionDetails = connectionDetailsToUpload, schema = resultsSchema)
+createResultsDataModel(connectionDetails = connectionDetailsToUpload, databaseSchema = resultsSchema)
 
 
 path = outputFolder

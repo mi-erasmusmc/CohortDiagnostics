@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">CohortDiagnostics</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">2.2.3</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">3.1.0</span>
       </span>
     </div>
 
@@ -26,7 +26,7 @@
   <a href="../reference/index.html">Reference</a>
 </li>
 <li class="dropdown">
-  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
     Articles
      
     <span class="caret"></span>
@@ -73,6 +73,69 @@
     </div>
 
     <div class="section level2">
+<h2 class="page-header" data-toc-text="3.1.0" id="cohortdiagnostics-310">CohortDiagnostics 3.1.0<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-310"></a></h2>
+<p>Changes:</p>
+<ol style="list-style-type: decimal"><li><p>Major refactoring of shiny app to use modular code for ease of maintenance</p></li>
+<li><p>Some tests for shiny modules in <code>inst/shiny/DiagnosticsExplorer/tests</code></p></li>
+<li><p>Added support for table prefixes in Diagnostics Explorer databases (e.g. cg_cohort_definition)</p></li>
+<li><p>Enabled annotation on local instances of DiagnosticsExplorer</p></li>
+<li><p>Added yaml configuration for diagnostics explorer app, including docs on usage</p></li>
+<li><p>Storage of version number in database results file to allow future migrations</p></li>
+<li><p>Slight optimization of cohort characterization queries in diagnostics explorer</p></li>
+<li><p>Changed type to dataType and fieldName to columnName to align with strategus modules</p></li>
+<li><p>Refactored export of characterization results to use common export</p></li>
+<li><p>Ensure that tests cases always use a continuous covariate</p></li>
+<li><p>Batch operations for executing cohort relationship, time series, and feature extraction based diagnostics.</p></li>
+<li><p>New parameter minCharacterizationMean. This introduces a cut off for the output of FeatureExtraction. In the absence of the parameter the output would have atleast one row for every covariateId in the datasource - most having very low count to be useful for diagnostics.</p></li>
+</ol><p>Bug fixes:</p>
+<ol style="list-style-type: decimal"><li><p>Fixed issue uploading results to postgres db caused by null values in primary key field. Removed constraint to fix issue.</p></li>
+<li><p>Fix for <code>index_event_breakdown</code> having duplicate entries where concept is observed in the same domain multiple times</p></li>
+<li><p>Many other issues resolved in shiny codebase</p></li>
+</ol></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="3.0.3" id="cohortdiagnostics-303">CohortDiagnostics 3.0.3<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-303"></a></h2>
+<p>Changes:</p>
+<ol style="list-style-type: decimal"><li><p>Changed default batch size for characterization feature extraction from 100 to 5 as it was causing performance issues on redshift clusters.</p></li>
+<li><p>Allow setting of batch size for feature extraction with <code>options("CohortDiagnostics-FE-batch-size" = batchSize)</code></p></li>
+</ol></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="3.0.2" id="cohortdiagnostics-302">CohortDiagnostics 3.0.2<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-302"></a></h2>
+<p>Bug fixes:</p>
+<ol style="list-style-type: decimal"><li><p>Fixed issue with writing csvs caused by update to SqlRender camelCaseToSnakeCase function check that caused execution to crash if parameters were null.</p></li>
+<li><p>Fixed issue with observation period overflowing sql integer on BigQuery causing execution to crash</p></li>
+</ol></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="3.0.1" id="cohortdiagnostics-301">CohortDiagnostics 3.0.1<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-301"></a></h2>
+<p>Bug fixes:</p>
+<ol style="list-style-type: decimal"><li><p>Updated old/incorrect documentation on package usage</p></li>
+<li><p>Fixed bug with new versions of CohortGenerator v0.5.0 causing cohort definition sets in package to not load</p></li>
+<li><p>Fixed bug in shiny app where multiple runs on the same database would cause the app to crash when selecting database</p></li>
+</ol></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="3.0.0" id="cohortdiagnostics-300">CohortDiagnostics 3.0.0<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-300"></a></h2>
+<p>Changes:</p>
+<ol style="list-style-type: decimal"><li><p>Time series diagnostics removed</p></li>
+<li><p>Removed runCohortDiagnostics function - this has now been completely replaced with executeDiagnostics</p></li>
+<li><p>Removed <code>loadCohortsFromPackage</code> function as this is now replaced with <code><a href="https://ohdsi.github.io/CohortGenerator/reference/getCohortDefinitionSet.html" class="external-link">CohortGenerator::getCohortDefinitionSet</a></code></p></li>
+<li><p>Removed instantiate cohort functionality, <code>instantiateCohortSet</code> should now be used with the <code>CohortGenerator</code> package</p></li>
+<li><p>Removed optional <code>inclusionStatisticsFolder</code> parameter, this is now all exported directly from <code>CohortGenerator</code> without the need to generate this first.</p></li>
+<li><p>Removed usage of Rdata files in DiagnosticsExplorer shiny app and function to create them <code>preMergeDiagnosticsFiles</code></p></li>
+<li><p>Added function <code>createMergedResultsFile</code> which outputs a shiny app</p></li>
+<li><p>Added support for any <code>SqlRender/DatabaseConnector</code> compatible database (note, this is experimental. Postgres and sqlite are the only backends recommended for use in production environments)</p></li>
+<li><p>Improved metadata collection and storage from runs of cohort diagnostics.</p></li>
+<li><p>Removed phenotype_id field from data ddl</p></li>
+<li><p>Additional checks to the output of cohort diagnostics to ensure it conforms to its own results data model. The new function (internal) is makeDataExportable. Results data model csv file has been enhanced with new fields, including a field to specify if the value is to be subjected to privacy protection (i.e. min cell count, eg. person count). Note a bug was discovered in the orphan concepts and included source concepts that was leading to duplication of row records by primary key. This bug has been fixed by calculating its max value grouped by primary keys. It will be fixed in another commit.</p></li>
+<li><p>New optional diagnostics computes temporal relationship between any two cohorts. The settings for the temporal relationship between cohorts defaults to be the same as temporalCovariateSettings. This diagnostics will be integrated into the characterization output of diagnostics explorer, where cohorts will be covariates.</p></li>
+<li><p>New optional diagnostics called time series diagnostics. Time series diagnostics takes as input a calendar period range, and in that calendar period range for calendar units (year, quarter, month) computes the approximate new occurrence (approximates incidence) and observations (approximates prevalence) of the cohort start and cohort end dates during the calendar period.</p></li>
+</ol><p>Bug fixes:</p>
+<ol style="list-style-type: decimal"><li>Added support for users to include non-standard columns in their CDM preventing crashes</li>
+</ol></div>
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="2.2.4" id="cohortdiagnostics-224">CohortDiagnostics 2.2.4<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-224"></a></h2>
+<p>Bug fixes:</p>
+<ol style="list-style-type: decimal"><li>Fixed a bug that was causing generation of premerged and upload files to fail when the output had fields that were not in the results data model.</li>
+</ol></div>
+    <div class="section level2">
 <h2 class="page-header" data-toc-text="2.2.3" id="cohortdiagnostics-223">CohortDiagnostics 2.2.3<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-223"></a></h2>
 <p>Bug fixes:</p>
 <ol style="list-style-type: decimal"><li>Replace use dplyr across() for bug introduced by tidyr v1.2.0</li>
@@ -87,7 +150,7 @@
 <p>Bug fixes:</p>
 <ol style="list-style-type: decimal"><li><p>Added new lines in NEWS.md to fix package site.</p></li>
 <li><p>Updated vignette to fix minor issues</p></li>
-<li><p>Fixed issue with time distributions breaking newer versions of R/dplyr</p></li>
+<li><p>Cohorts with zero counts are now stored in results and display in shiny app</p></li>
 </ol></div>
     <div class="section level2">
 <h2 class="page-header" data-toc-text="2.2.0" id="cohortdiagnostics-220">CohortDiagnostics 2.2.0<a class="anchor" aria-label="anchor" href="#cohortdiagnostics-220"></a></h2>
@@ -308,7 +371,7 @@
 </div>
 
 <div class="pkgdown">
-  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.0.2.</p>
+  <p></p><p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.0.5.</p>
 </div>
 
       </footer></div>

@@ -2,41 +2,36 @@
 % Please edit documentation in R/RunDiagnostics.R
 \name{executeDiagnostics}
 \alias{executeDiagnostics}
-\title{Execute cohort diagnostics functions}
+\title{Execute cohort diagnostics}
 \usage{
 executeDiagnostics(
   cohortDefinitionSet,
   exportFolder,
   databaseId,
+  cohortDatabaseSchema,
+  databaseName = NULL,
+  databaseDescription = NULL,
   connectionDetails = NULL,
   connection = NULL,
   cdmDatabaseSchema,
   tempEmulationSchema = getOption("sqlRenderTempEmulationSchema"),
-  cohortDatabaseSchema,
   cohortTable = "cohort",
   cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = cohortTable),
   vocabularyDatabaseSchema = cdmDatabaseSchema,
   cohortIds = NULL,
-  inclusionStatisticsFolder = NULL,
-  databaseName = databaseId,
-  databaseDescription = databaseId,
   cdmVersion = 5,
   runInclusionStatistics = TRUE,
   runIncludedSourceConcepts = TRUE,
   runOrphanConcepts = TRUE,
-  runTimeDistributions = TRUE,
+  runTimeSeries = FALSE,
   runVisitContext = TRUE,
   runBreakdownIndexEvents = TRUE,
   runIncidenceRate = TRUE,
-  runTimeSeries = FALSE,
-  runCohortOverlap = TRUE,
-  runCohortCharacterization = TRUE,
-  covariateSettings = createDefaultCovariateSettings(),
+  runCohortRelationship = TRUE,
   runTemporalCohortCharacterization = TRUE,
-  temporalCovariateSettings = createTemporalCovariateSettings(useConditionOccurrence =
-    TRUE, useDrugEraStart = TRUE, useProcedureOccurrence = TRUE, useMeasurement = TRUE,
-    temporalStartDays = c(-365, -30, 0, 1, 31), temporalEndDays = c(-31, -1, 0, 30, 365)),
+  temporalCovariateSettings = getDefaultCovariateSettings(),
   minCellCount = 5,
+  minCharacterizationMean = 0.01,
   incremental = FALSE,
   incrementalFolder = file.path(exportFolder, "incremental")
 )
@@ -48,6 +43,14 @@ executeDiagnostics(
 does not exist it will be created.}
 
 \item{databaseId}{A short string for identifying the database (e.g. 'Synpuf').}
+
+\item{cohortDatabaseSchema}{Schema name where your cohort table resides. Note that for SQL Server,
+this should include both the database and schema name, for example
+'scratch.dbo'.}
+
+\item{databaseName}{The full name of the database. If NULL, defaults to value in cdm_source table}
+
+\item{databaseDescription}{A short description (several sentences) of the database. If NULL, defaults to value in cdm_source table}
 
 \item{connectionDetails}{An object of type \code{connectionDetails} as created using the
 \code{\link[DatabaseConnector]{createConnectionDetails}} function in the
@@ -67,10 +70,6 @@ schema name, for example 'cdm_data.dbo'.}
 \item{tempEmulationSchema}{Some database platforms like Oracle and Impala do not truly support temp tables. To emulate temp 
 tables, provide a schema with write privileges where temp tables can be created.}
 
-\item{cohortDatabaseSchema}{Schema name where your cohort table resides. Note that for SQL Server,
-this should include both the database and schema name, for example
-'scratch.dbo'.}
-
 \item{cohortTable}{Name of the cohort table.}
 
 \item{cohortTableNames}{Cohort Table names used by CohortGenerator package}
@@ -83,13 +82,6 @@ schema name, for example 'vocabulary.dbo'.}
 \item{cohortIds}{Optionally, provide a subset of cohort IDs to restrict the
 diagnostics to.}
 
-\item{inclusionStatisticsFolder}{The folder where the inclusion rule statistics are stored. Can be
-left NULL if \code{runInclusionStatistics = FALSE}.}
-
-\item{databaseName}{The full name of the database. If NULL, defaults to databaseId.}
-
-\item{databaseDescription}{A short description (several sentences) of the database. If NULL, defaults to databaseId.}
-
 \item{cdmVersion}{The version of the OMOP CDM. Default 5. (Note: only 5 is supported.)}
 
 \item{runInclusionStatistics}{Generate and export statistic on the cohort inclusion rules?}
@@ -98,7 +90,7 @@ left NULL if \code{runInclusionStatistics = FALSE}.}
 
 \item{runOrphanConcepts}{Generate and export potential orphan concepts?}
 
-\item{runTimeDistributions}{Generate and export cohort time distributions?}
+\item{runTimeSeries}{Generate and export the time series diagnostics?}
 
 \item{runVisitContext}{Generate and export index-date visit context?}
 
@@ -106,18 +98,8 @@ left NULL if \code{runInclusionStatistics = FALSE}.}
 
 \item{runIncidenceRate}{Generate and export the cohort incidence  rates?}
 
-\item{runTimeSeries}{Generate and export the cohort prevalence  rates?}
-
-\item{runCohortOverlap}{Generate and export the cohort overlap? Overlaps are checked within cohortIds
-that have the same phenotype ID sourced from the CohortSetReference or
-cohortToCreateFile.}
-
-\item{runCohortCharacterization}{Generate and export the cohort characterization?
-Only records with values greater than 0.0001 are returned.}
-
-\item{covariateSettings}{Either an object of type \code{covariateSettings} as created using one of
-the createCovariateSettings function in the FeatureExtraction package, or a list
-of such objects.}
+\item{runCohortRelationship}{Generate and export the cohort relationship? Cohort relationship checks the temporal
+relationship between two or more cohorts.}
 
 \item{runTemporalCohortCharacterization}{Generate and export the temporal cohort characterization?
 Only records with values greater than 0.001 are returned.}
@@ -128,36 +110,55 @@ of such objects.}
 
 \item{minCellCount}{The minimum cell count for fields contains person counts or fractions.}
 
+\item{minCharacterizationMean}{The minimum mean value for characterization output. Values below this will be cut off from output. This
+will help reduce the file size of the characterization output, but will remove information
+on covariates that have very low values. The default is 0.001 (i.e. 0.1 percent)}
+
 \item{incremental}{Create only cohort diagnostics that haven't been created before?}
 
 \item{incrementalFolder}{If \code{incremental = TRUE}, specify a folder where records are kept
 of which cohort diagnostics has been executed.}
 }
 \description{
-Execute cohort diagnostics on a set of cohorts.
-Assumes that cohorts have already been instantiated in advance.
+Runs the cohort diagnostics on all (or a subset of) the cohorts instantiated using the
+Assumes the cohorts have already been instantiated. with the CohortGenerator package
 
-Note that none of the references passed to this function are used, they are required for results.
+Characterization:
+If runTemporalCohortCharacterization argument is TRUE, then the following default covariateSettings object will be created
+using \code{RFeatureExtraction::createTemporalCovariateSettings}
+Alternatively, a covariate setting object may be created using the above as an example.
+}
+\details{
+The \code{cohortSetReference} argument must be a data frame with at least the following columns.These fields will be exported as is to the cohort table that is part of Cohort Diagnostics results data model. Any additional fields found will be stored as JSON object in the metadata field of the cohort table:
+\describe{
+\item{cohortId}{The cohort Id is the id used to identify  a cohort definition. This is required to be unique. It will be used to create file names.}
+\item{cohortName}{The full name of the cohort. This will be shown in the Shiny app.}
+\item{json}{The JSON cohort definition for the cohort.}
+\item{sql}{The SQL of the cohort definition rendered from the cohort json.}
+}
 }
 \examples{
-
 \dontrun{
 # Load cohorts (assumes that they have already been instantiated)
 cohortTableNames <- CohortGenerator::getCohortTableNames(cohortTable = "cohort")
-cohorts <- loadCohortsFromPackage(packageName = "MyGreatPackage")
-connectionDetails <- createConnectionDetails(dbms = "postgresql",
-                                             server = "ohdsi.com",
-                                             port = 5432,
-                                             user = "me",
-                                             password = "secure")
+cohorts <- CohortGenerator::getCohortDefinitionSet(packageName = "MyGreatPackage")
+connectionDetails <- createConnectionDetails(
+  dbms = "postgresql",
+  server = "ohdsi.com",
+  port = 5432,
+  user = "me",
+  password = "secure"
+)
 
-executeDiagnostics(cohorts = cohorts,
-                   exportFolder = "export",
-                   cohortTableNames = cohortTableNames,
-                   cohortDatabaseSchema = "results",
-                   cdmDatabaseSchema = "cdm",
-                   databaseId = "mySpecialCdm",
-                   connectionDetails = connectionDetails)
+executeDiagnostics(
+  cohorts = cohorts,
+  exportFolder = "export",
+  cohortTableNames = cohortTableNames,
+  cohortDatabaseSchema = "results",
+  cdmDatabaseSchema = "cdm",
+  databaseId = "mySpecialCdm",
+  connectionDetails = connectionDetails
+)
 
 # Use a custom set of cohorts defined in a data.frame
 cohorts <- data.frame(
@@ -167,13 +168,15 @@ cohorts <- data.frame(
   sql = c(readLines("path_to.sql")),
   json = c(readLines("path_to.json"))
 )
-executeDiagnostics(cohorts = cohorts,
-                   exportFolder = "export",
-                   cohortTable = "cohort",
-                   cohortDatabaseSchema = "results",
-                   cdmDatabaseSchema = "cdm",
-                   databaseId = "mySpecialCdm",
-                   connectionDetails = connectionDetails)
+executeDiagnostics(
+  cohorts = cohorts,
+  exportFolder = "export",
+  cohortTable = "cohort",
+  cohortDatabaseSchema = "results",
+  cdmDatabaseSchema = "cdm",
+  databaseId = "mySpecialCdm",
+  connectionDetails = connectionDetails
+)
 }
 
 }

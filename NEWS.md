@@ -1,3 +1,123 @@
+CohortDiagnostics 3.1.0
+=======================
+Changes:
+
+1. Major refactoring of shiny app to use modular code for ease of maintenance
+
+2. Some tests for shiny modules in `inst/shiny/DiagnosticsExplorer/tests`
+
+3. Added support for table prefixes in Diagnostics Explorer databases (e.g. cg_cohort_definition)
+
+4. Enabled annotation on local instances of DiagnosticsExplorer
+
+5. Added yaml configuration for diagnostics explorer app, including docs on usage
+
+6. Storage of version number in database results file to allow future migrations
+
+7. Slight optimization of cohort characterization queries in diagnostics explorer
+
+8. Support for database migrations by adding `migrateDataModel` functionality.
+Versions of data generated with CohortDiagnostics 3.0.0 are intended to be future compatible.
+i.e. if you have an sqlite results file or postgres database generated with version 3.0.0 of cohort diagnostics
+new shiny app functionality will be supported if you run ``migrateDataModel`` on it.
+
+9. Changed type to dataType and fieldName to columnName to align with strategus modules
+
+9. Refactored export of characterization results to use common export
+
+10. Ensure that tests cases always use a continuous covariate
+
+11. Batch operations for executing cohort relationship, time series, and feature extraction based diagnostics.
+
+13. New parameter minCharacterizationMean. This introduces a cut off for the output of FeatureExtraction. In the absence of the parameter the output would have atleast one row for every covariateId in the datasource  - most having very low count to be useful for diagnostics.
+
+Bug fixes:
+
+1. Fixed issue uploading results to postgres db caused by null values in primary key field. 
+Removed constraint to fix issue.
+
+2. Fix for `index_event_breakdown` having duplicate entries where concept is observed in the same domain multiple times
+
+3. Many other issues resolved in shiny codebase
+
+
+CohortDiagnostics 3.0.3
+=======================
+
+Changes:
+
+1. Changed default batch size for characterization feature extraction from 100 to 5 as it was causing performance issues
+on redshift clusters.
+
+2. Allow setting of batch size for feature extraction with `options("CohortDiagnostics-FE-batch-size" = batchSize)`
+
+CohortDiagnostics 3.0.2
+=======================
+
+Bug fixes:
+
+1. Fixed issue with writing csvs caused by update to SqlRender camelCaseToSnakeCase function check that caused execution
+to crash if parameters were null.
+
+3. Fixed issue with observation period overflowing sql integer on BigQuery causing execution to crash
+
+CohortDiagnostics 3.0.1
+=======================
+
+Bug fixes:
+
+1. Updated old/incorrect documentation on package usage
+
+2. Fixed bug with new versions of CohortGenerator v0.5.0 causing cohort definition sets in package to not load
+
+3. Fixed bug in shiny app where multiple runs on the same database would cause the app to crash when selecting database
+
+CohortDiagnostics 3.0.0
+=======================
+Changes:
+
+1. Time series diagnostics removed
+
+2. Removed runCohortDiagnostics function - this has now been completely replaced with executeDiagnostics
+
+3. Removed `loadCohortsFromPackage` function as this is now replaced with
+`CohortGenerator::getCohortDefinitionSet`
+
+4. Removed instantiate cohort functionality, `instantiateCohortSet` should now be used with the `CohortGenerator` package
+
+5. Removed optional `inclusionStatisticsFolder` parameter, this is now all exported directly from `CohortGenerator` 
+without the need to generate this first.
+
+6. Removed usage of Rdata files in DiagnosticsExplorer shiny app and function to create them `preMergeDiagnosticsFiles`
+
+7. Added function `createMergedResultsFile` which outputs a shiny app
+
+8. Added support for any `SqlRender/DatabaseConnector` compatible database (note, 
+this is experimental. Postgres and sqlite are the only backends recommended for use in production environments)
+
+9. Improved metadata collection and storage from runs of cohort diagnostics.
+
+10. Removed phenotype_id field from data ddl
+
+11. Additional checks to the output of cohort diagnostics to ensure it conforms to its own results data model. The new function (internal) is makeDataExportable. Results data model csv file has been enhanced with new fields, including a field to specify if the value is to be subjected to privacy protection (i.e. min cell count, eg. person count). Note a bug was discovered in the orphan concepts and included source concepts that was leading to duplication of row records by primary key. This bug has been fixed by calculating its max value grouped by primary keys. It will be fixed in another commit.
+
+12. New optional diagnostics computes temporal relationship between any two cohorts. The settings for the temporal relationship between cohorts defaults to be the same as temporalCovariateSettings. This diagnostics will be integrated into the characterization output of diagnostics explorer, where cohorts will be covariates.
+
+13. New optional diagnostics called time series diagnostics. Time series diagnostics takes as input a calendar period range, and in that calendar period range for calendar units (year, quarter, month) computes the approximate new occurrence (approximates incidence) and observations (approximates prevalence) of the cohort start and cohort end dates during the calendar period. 
+
+Bug fixes:
+
+1. Added support for users to include non-standard columns in their CDM preventing crashes
+
+
+CohortDiagnostics 2.2.4
+=======================
+
+Bug fixes:
+
+1. Fixed a bug that was causing generation of premerged and upload files to fail when the output had fields that were not in the results data model.
+
+
 CohortDiagnostics 2.2.3
 =======================
 
@@ -23,7 +143,7 @@ Bug fixes:
 
 2. Updated vignette to fix minor issues
 
-3. Fixed issue with time distributions breaking newer versions of R/dplyr
+3. Cohorts with zero counts are now stored in results and display in shiny app
 
 CohortDiagnostics 2.2.0
 =======================

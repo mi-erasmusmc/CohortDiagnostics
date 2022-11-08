@@ -32,11 +32,12 @@ This vignette discusses the process of generating a results set with `CohortDiag
 Please see the [HADES library](https://ohdsi.github.io/hades) for more information on the background for this.
 
 ## pre-requisites
-Ensure that `CohortDiagnostics` is installed on your system.
-In addition we will require the `CohortGenerator` and, optionally, the `ROhdsiWebApi` packages:
+Ensure that `CohortDiagnostics` is installed on your system and updated to the latest version.
+For this example we will also be using the `Eunomia` test package.
+Optionally, you may install the `ROhdsiWebApi` package to download cohort definitions from an ATLAS instance:
 
 ```{r eval=FALSE}
-remotes::install_github('OHDSI/CohortGenerator')
+remotes::install_github('OHDSI/Eunomia')
 remotes::install_github('OHDSI/ROhdsiWebApi')
 ```
 
@@ -75,12 +76,20 @@ This is a dedicated R package that can be installed on a system and run.
 The primary reason for this is due to reproducibility, cohort definitions and resources frequently change.
 However, a study package can be seen as a snapshot, frozen at the time of creation and incrementally updated.
 
-For example, the cohort diagnostics package includes a set of cohort sql and json to run on the Eunomia data set.
+For example, the cohort diagnostics package includes an example set of cohort sql and json to run on the `Eunomia` test data in the OMOP Common Data Model format.
 
 ```{r results = FALSE,message = FALSE,warning=FALSE,eval=FALSE}
 library(CohortDiagnostics)
-cohortDefinitionSet <- loadCohortsFromPackage(packageName = "CohortDiagnostics",
-                                              cohortToCreateFile = "settings/CohortsToCreateForTesting.csv")
+cohortDefinitionSet <- CohortGenerator::getCohortDefinitionSet(settingsFileName = "Cohorts.csv",
+                                                               jsonFolder = "cohorts",
+                                                               sqlFolder = "sql/sql_server",
+                                                               packageName = "CohortDiagnostics")
+```
+
+Looking at this data.frame of Cohorts you will see the sql and json for these cohorts:
+
+```{r, eval=FALSE}
+View(cohortDefinitionSet)
 ```
 
 ## Loading cohort references from WebApi
@@ -172,15 +181,15 @@ When unzipped, the zip file will contain several .csv files that maybe easily au
 Note that cell counts smaller than 5 have been removed, as specified using the `minCellCount` argument, to ensure non-identifiability.
 
 
-## Creating a pre merged file
+## Creating an sqlite db file
 
 Assuming you completed the steps described above for one or more databases, you should now have a set of zip files, one per database.
 Make sure to place all zip files in a single folder.
 
-Optionally, we can pre-merge the zip files, so we can view results in the Shiny app:
+Optionally, we can pre-merge the zip files into an sqlite database so we can view results in the Shiny app:
 
 ```{r tidy=FALSE,eval=FALSE}
-preMergeDiagnosticsFiles(exportFolder)
+createMergedResultsFile(exportFolder)
 ```
 
 This file can be used in the shiny app to explore results.
