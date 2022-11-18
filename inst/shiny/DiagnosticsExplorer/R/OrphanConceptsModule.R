@@ -4,6 +4,13 @@ orpahanConceptsView <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
     shinydashboard::box(
+      collapsible = TRUE,
+      collapsed = TRUE,
+      title = "Orphan Concepts",
+      width = "100%",
+      shiny::htmlTemplate(file.path("html", "orphanConcepts.html"))
+    ),
+    shinydashboard::box(
       status = "warning",
       width = "100%",
       tags$div(
@@ -40,7 +47,8 @@ orpahanConceptsView <- function(id) {
           )
         )
       ),
-      shinycssloaders::withSpinner(reactable::reactableOutput(outputId = ns("orphanConceptsTable")))
+      shinycssloaders::withSpinner(reactable::reactableOutput(outputId = ns("orphanConceptsTable"))),
+      csvDownloadButton(ns, "orphanConceptsTable")
     )
   )
 }
@@ -66,6 +74,7 @@ orphanConceptsModule <- function(id,
         cohortId = targetCohortId(),
         databaseIds = selectedDatabaseIds()
       )
+      
       if (!hasData(data)) {
         return(NULL)
       }
@@ -73,11 +82,14 @@ orphanConceptsModule <- function(id,
         dplyr::arrange(dplyr::desc(.data$conceptCount))
       return(data)
     })
-
-    output$orphanConceptsTable <- reactable::renderReactable(expr = {
+    
+    # Reactive below developed for testing purposes
+    # Focuses on filtering the standard vs. non-standard codes
+    filteringStandardConceptsReactive <- shiny::reactive(x = {
       data <- orphanConceptsDataReactive()
       validate(need(hasData(data), "There is no data for the selected combination."))
-
+      
+      
       if (hasData(selectedConceptSets())) {
         if (!is.null(selectedConceptSets())) {
           if (length(conceptSetIds()) > 0) {
@@ -96,11 +108,18 @@ orphanConceptsModule <- function(id,
         data <- data %>%
           dplyr::filter(is.na(.data$standardConcept) |
                           (
-                            !is.na(.data$standardConcept) && .data$standardConcept != "S"
+                            all(!is.na(.data$standardConcept), .data$standardConcept != "S")
                           ))
       }
+      
+      return (data)
+      
+    })
 
+    output$orphanConceptsTable <- reactable::renderReactable(expr = {
+      data <- filteringStandardConceptsReactive()
       validate(need(hasData(data), "There is no data for the selected combination."))
+    
 
       data <- data %>%
         dplyr::select(
@@ -178,7 +197,7 @@ orphanConceptsModule <- function(id,
       displayTable <- getDisplayTableGroupedByDatabaseId(
         data = data,
         cohort = cohort,
-        database = database,
+        databaseTable = database,
         headerCount = countsForHeader,
         keyColumns = keyColumnFields,
         countLocation = countLocation,

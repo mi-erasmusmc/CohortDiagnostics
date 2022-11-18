@@ -94,14 +94,14 @@ checkFixColumnNames <-
 
     optionalNames <- tableSpecs %>%
       dplyr::filter(.data$optional == "Yes") %>%
-      dplyr::select(.data$fieldName)
+      dplyr::select(.data$columnName)
 
     expectedNames <- tableSpecs %>%
-      dplyr::select(.data$fieldName) %>%
-      dplyr::anti_join(dplyr::filter(optionalNames, !.data$fieldName %in% observeredNames),
-                       by = "fieldName"
+      dplyr::select(.data$columnName) %>%
+      dplyr::anti_join(dplyr::filter(optionalNames, !.data$columnName %in% observeredNames),
+                       by = "columnName"
       ) %>%
-      dplyr::arrange(.data$fieldName) %>%
+      dplyr::arrange(.data$columnName) %>%
       dplyr::pull()
 
     if (!checkmate::testNames(observeredNames, must.include = expectedNames)) {
@@ -118,7 +118,7 @@ checkFixColumnNames <-
 
     sharedFields <- intersect(
       x = observeredNames,
-      y = tableSpecs$fieldName
+      y = tableSpecs$columnName
     )
     table <- table %>%
       dplyr::select(dplyr::all_of(sharedFields))
@@ -135,15 +135,15 @@ checkAndFixDataTypes <-
 
     observedTypes <- sapply(table, class)
     for (i in 1:length(observedTypes)) {
-      fieldName <- names(observedTypes)[i]
+      columnName <- names(observedTypes)[i]
       expectedType <-
-        gsub("\\(.*\\)", "", tolower(tableSpecs$type[tableSpecs$fieldName == fieldName]))
+        gsub("\\(.*\\)", "", tolower(tableSpecs$dataType[tableSpecs$columnName == columnName]))
       if (expectedType == "bigint" || expectedType == "float") {
         if (observedTypes[i] != "numeric" && observedTypes[i] != "double") {
           ParallelLogger::logDebug(
             sprintf(
               "Field %s in table %s in zip file %s is of type %s, but was expecting %s. Attempting to convert.",
-              fieldName,
+              columnName,
               tableName,
               zipFileName,
               observedTypes[i],
@@ -157,7 +157,7 @@ checkAndFixDataTypes <-
           ParallelLogger::logDebug(
             sprintf(
               "Field %s in table %s in zip file %s is of type %s, but was expecting %s. Attempting to convert.",
-              fieldName,
+              columnName,
               tableName,
               zipFileName,
               observedTypes[i],
@@ -171,7 +171,7 @@ checkAndFixDataTypes <-
           ParallelLogger::logDebug(
             sprintf(
               "Field %s in table %s in zip file %s is of type %s, but was expecting %s. Attempting to convert.",
-              fieldName,
+              columnName,
               tableName,
               zipFileName,
               observedTypes[i],
@@ -185,7 +185,7 @@ checkAndFixDataTypes <-
           ParallelLogger::logDebug(
             sprintf(
               "Field %s in table %s in zip file %s is of type %s, but was expecting %s. Attempting to convert.",
-              fieldName,
+              columnName,
               tableName,
               zipFileName,
               observedTypes[i],
@@ -207,7 +207,7 @@ checkAndFixDuplicateRows <-
     primaryKeys <- specifications %>%
       dplyr::filter(.data$tableName == !!tableName &
                       .data$primaryKey == "Yes") %>%
-      dplyr::select(.data$fieldName) %>%
+      dplyr::select(.data$columnName) %>%
       dplyr::pull()
     duplicatedRows <- duplicated(table[, primaryKeys])
     if (any(duplicatedRows)) {
@@ -234,7 +234,7 @@ appendNewRows <-
       primaryKeys <- specifications %>%
         dplyr::filter(.data$tableName == !!tableName &
                         .data$primaryKey == "Yes") %>%
-        dplyr::select(.data$fieldName) %>%
+        dplyr::select(.data$columnName) %>%
         dplyr::pull()
       newData <- newData %>%
         dplyr::anti_join(data, by = primaryKeys)
@@ -242,34 +242,8 @@ appendNewRows <-
     return(dplyr::bind_rows(data, newData))
   }
 
-
-#' Create the results data model tables on a database server.
-#'
-#' @details
-#' Only PostgreSQL servers are supported.
-#'
-#' @template Connection
-#' @param schema         The schema on the postgres server where the tables will be created.
-#' @param tablePrefix    (Optional)  string to insert before table names (e.g. "cd_") for database table names
-#'
-#' @export
-createResultsDataModel <- function(connection = NULL,
-                                   connectionDetails = NULL,
-                                   schema,
-                                   tablePrefix = "") {
-  if (is.null(connection)) {
-    if (!is.null(connectionDetails)) {
-      connection <- DatabaseConnector::connect(connectionDetails)
-      on.exit(DatabaseConnector::disconnect(connection))
-    } else {
-      stop("No connection or connectionDetails provided.")
-    }
-  }
-
-  if (connection@dbms == "sqlite" & schema != "main") {
-    stop("Invalid schema for sqlite, use schema = 'main'")
-  }
-
+# Private function for testing migrations in isolation
+.createDataModel <- function(connection, databaseSchema, tablePrefix) {
   sqlParams <- getPrefixedTableNames(tablePrefix)
   sql <- do.call(SqlRender::loadRenderTranslateSql,
                  c(sqlParams,
@@ -277,9 +251,34 @@ createResultsDataModel <- function(connection = NULL,
                      sqlFilename = "CreateResultsDataModel.sql",
                      packageName = utils::packageName(),
                      dbms = connection@dbms,
-                     results_schema = schema
+                     results_schema = databaseSchema
                    )))
   DatabaseConnector::executeSql(connection, sql)
+}
+
+#' Create the results data model tables on a database server.
+#'
+#' @details
+#' Only PostgreSQL servers are supported.
+#'
+#' @param connectionDetails      DatabaseConnector connectionDetails instance @seealso[DatabaseConnector::createConnectionDetails]
+#' @param databaseSchema         The schema on the postgres server where the tables will be created.
+#' @param tablePrefix            (Optional)  string to insert before table names (e.g. "cd_") for database table names
+#' @export
+createResultsDataModel <- function(connectionDetails = NULL,
+                                   databaseSchema,
+                                   tablePrefix = "") {
+  if (connectionDetails$dbms == "sqlite" & databaseSchema != "main") {
+    stop("Invalid schema for sqlite, use databaseSchema = 'main'")
+  }
+
+  connection <- DatabaseConnector::connect(connectionDetails)
+  on.exit(DatabaseConnector::disconnect(connection))
+
+  .createDataModel(connection, databaseSchema, tablePrefix)
+  migrateDataModel(connectionDetails = connectionDetails,
+                   databaseSchema = databaseSchema,
+                   tablePrefix = tablePrefix)
 }
 
 naToEmpty <- function(x) {
@@ -317,7 +316,7 @@ naToZero <- function(x) {
 #' @param tablePrefix    (Optional)  string to insert before table names (e.g. "cd_") for database table names
 #'
 #' @export
-uploadResults <- function(connectionDetails = NULL,
+uploadResults <- function(connectionDetails,
                           schema,
                           zipFileName,
                           forceOverWriteOfSpecifications = FALSE,
@@ -340,17 +339,21 @@ uploadResults <- function(connectionDetails = NULL,
   zip::unzip(zipFileName, exdir = unzipFolder)
 
   specifications <- getResultsDataModelSpecifications()
-
-  if (purgeSiteDataBeforeUploading) {
-    database <-
-      readr::read_csv(
-        file = file.path(unzipFolder, "database.csv"),
-        col_types = readr::cols()
-      )
-    colnames(database) <-
-      SqlRender::snakeCaseToCamelCase(colnames(database))
-    databaseId <- database$databaseId
+  databaseFile <- file.path(unzipFolder, "database.csv")
+  # check required tables are found in folder
+  if (!file.exists(databaseFile)) {
+    stop("database metadata file not found - cannot upload results")
   }
+
+  database <-
+    readr::read_csv(
+      file = databaseFile,
+      col_types = readr::cols()
+    )
+  colnames(database) <-
+    SqlRender::snakeCaseToCamelCase(colnames(database))
+  databaseId <- database$databaseId
+
 
   uploadTable <- function(tableName) {
     ParallelLogger::logInfo("Uploading table ", tableName)
@@ -358,7 +361,7 @@ uploadResults <- function(connectionDetails = NULL,
     primaryKey <- specifications %>%
       filter(.data$tableName == !!tableName &
                .data$primaryKey == "Yes") %>%
-      select(.data$fieldName) %>%
+      select(.data$columnName) %>%
       pull()
 
     if (purgeSiteDataBeforeUploading &&
@@ -430,9 +433,9 @@ uploadResults <- function(connectionDetails = NULL,
           filter(
             .data$tableName == env$tableName &
               .data$emptyIsNa == "No" &
-              grepl("varchar", .data$type)
+              grepl("varchar", .data$dataType)
           ) %>%
-          select(.data$fieldName) %>%
+          select(.data$columnName) %>%
           pull()
         if (length(toEmpty) > 0) {
           chunk <- chunk %>%
@@ -443,9 +446,9 @@ uploadResults <- function(connectionDetails = NULL,
           filter(
             .data$tableName == env$tableName &
               .data$emptyIsNa == "No" &
-              .data$type %in% c("int", "bigint", "float")
+              .data$dataType %in% c("int", "bigint", "float")
           ) %>%
-          select(.data$fieldName) %>%
+          select(.data$columnName) %>%
           pull()
         if (length(tozero) > 0) {
           chunk <- chunk %>%
@@ -514,10 +517,6 @@ uploadResults <- function(connectionDetails = NULL,
         guess_max = 1e6,
         progress = FALSE
       )
-
-      # chunk <- readr::read_csv(file = file.path(unzipFolder, csvFileName),
-      # col_types = readr::cols(),
-      # guess_max = 1e6)
     }
   }
 
@@ -597,4 +596,51 @@ deleteAllRecordsForDatabaseId <- function(connection,
                                                  reportOverallTime = FALSE
     )
   }
+}
+
+#' Migrate Data model
+#' @description
+#' Migrate data from current state to next state
+#'
+#' It is strongly advised that you have a backup of all data (either sqlite files, a backup database (in the case you
+#' are using a postgres backend) or have kept the csv/zip files from your data generation.
+#'
+#' @inheritParams getDataMigrator
+#' @export
+migrateDataModel <- function(connectionDetails, databaseSchema, tablePrefix = "") {
+  ParallelLogger::logInfo("Migrating data set")
+  migrator <- getDataMigrator(connectionDetails = connectionDetails, databaseSchema = databaseSchema, tablePrefix = tablePrefix)
+  migrator$executeMigrations()
+  migrator$finalize()
+
+  ParallelLogger::logInfo("Updating version number")
+  updateVersionSql <- SqlRender::loadRenderTranslateSql("UpdateVersionNumber.sql",
+                                                        packageName = utils::packageName(),
+                                                        database_schema = databaseSchema,
+                                                        table_prefix = tablePrefix,
+                                                        dbms = connectionDetails$dbms)
+
+  connection <- DatabaseConnector::connect(connectionDetails = connectionDetails)
+  on.exit(DatabaseConnector::disconnect(connection))
+  DatabaseConnector::executeSql(connection, updateVersionSql)
+}
+
+
+#' Get database migrations instance
+#' @description
+#'
+#' Returns ResultModelManager DataMigrationsManager instance.
+# '@seealso [ResultModelManager::DataMigrationManager] which this function is a utility for.
+#'
+#' @param connectionDetails             DatabaseConnector connection details object
+#' @param databaseSchema                String schema where database schema lives
+#' @param  tablePrefix                  (Optional) Use if a table prefix is used before table names (e.g. "cd_")
+#' @returns Instance of ResultModelManager::DataMigrationManager that has interface for converting existing data models
+#' @export
+getDataMigrator <- function(connectionDetails, databaseSchema, tablePrefix = "") {
+  ResultModelManager::DataMigrationManager$new(connectionDetails = connectionDetails,
+                                               databaseSchema = databaseSchema,
+                                               tablePrefix = tablePrefix,
+                                               migrationPath = "migrations",
+                                               packageName = utils::packageName())
 }

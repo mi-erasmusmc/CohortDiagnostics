@@ -2,6 +2,13 @@ conceptsInDataSourceView <- function(id) {
   ns <- shiny::NS(id)
   shiny::tagList(
     shinydashboard::box(
+      collapsible = TRUE,
+      collapsed = TRUE,
+      title = "Concepts in Data Source",
+      width = "100%",
+      shiny::htmlTemplate(file.path("html", "conceptsInDataSource.html"))
+    ),
+    shinydashboard::box(
       status = "warning",
       width = "100%",
       tags$div(
@@ -10,7 +17,7 @@ conceptsInDataSourceView <- function(id) {
       )
     ),
     shinydashboard::box(
-      title = "Concepts in Data Source",
+      title = NULL,
       width = NULL,
       tags$table(
         width = "100%",
@@ -36,7 +43,8 @@ conceptsInDataSourceView <- function(id) {
           )
         ),
       ),
-      shinycssloaders::withSpinner(reactable::reactableOutput(outputId = ns("conceptsInDataSourceTable")))
+      shinycssloaders::withSpinner(reactable::reactableOutput(outputId = ns("conceptsInDataSourceTable"))),
+      csvDownloadButton(ns, "conceptsInDataSourceTable")
     )
   )
 }
@@ -48,7 +56,6 @@ conceptsInDataSourceModule <- function(id,
                                        selectedDatabaseIds,
                                        targetCohortId,
                                        selectedConceptSets,
-                                       getResolvedAndMappedConceptIdsForFilters,
                                        cohortTable,
                                        databaseTable) {
   ns <- shiny::NS(id)
@@ -72,6 +79,65 @@ conceptsInDataSourceModule <- function(id,
       return(data)
     })
 
+    conceptSetIds <- shiny::reactive({
+      selectedConceptSets()
+    })
+
+    getResolvedConcepts <- shiny::reactive({
+      output <- resolvedConceptSet(
+        dataSource = dataSource,
+        databaseIds = selectedDatabaseIds(),
+        cohortId = targetCohortId()
+      )
+      if (!hasData(output)) {
+        return(NULL)
+      }
+      return(output)
+    })
+
+    ### getMappedConceptsReactive ----
+    getMappedConcepts <- shiny::reactive({
+      progress <- shiny::Progress$new()
+      on.exit(progress$close())
+      progress$set(message = "Getting concepts mapped to concept ids resolved by concept set expression (may take time)", value = 0)
+      output <- mappedConceptSet(dataSource = dataSource,
+                                 databaseIds = selectedDatabaseIds(),
+                                 cohortId = targetCohortId())
+      if (!hasData(output)) {
+        return(NULL)
+      }
+      return(output)
+    })
+
+    getFilteredConceptIds <- shiny::reactive({
+      validate(need(hasData(selectedDatabaseIds()), "No data sources chosen"))
+      validate(need(hasData(targetCohortId()), "No cohort chosen"))
+      validate(need(hasData(conceptSetIds()), "No concept set id chosen"))
+      resolved <- getResolvedConcepts()
+      mapped <- getMappedConcepts()
+      output <- c()
+      if (hasData(resolved)) {
+        resolved <- resolved %>%
+          dplyr::filter(.data$databaseId %in% selectedDatabaseIds()) %>%
+          dplyr::filter(.data$cohortId %in% targetCohortId()) %>%
+          dplyr::filter(.data$conceptSetId %in% conceptSetIds())
+        output <- c(output, resolved$conceptId) %>% unique()
+      }
+      if (hasData(mapped)) {
+        mapped <- mapped %>%
+          dplyr::filter(.data$databaseId %in% selectedDatabaseIds()) %>%
+          dplyr::filter(.data$cohortId %in% targetCohortId()) %>%
+          dplyr::filter(.data$conceptSetId %in% conceptSetIds())
+        output <- c(output, mapped$conceptId) %>% unique()
+      }
+
+      if (hasData(output)) {
+        return(output)
+      } else {
+        return(NULL)
+      }
+    })
+
     output$conceptsInDataSourceTable <- reactable::renderReactable(expr = {
       validate(need(hasData(selectedDatabaseIds()), "No cohort chosen"))
       validate(need(hasData(targetCohortId()), "No cohort chosen"))
@@ -82,9 +148,9 @@ conceptsInDataSourceModule <- function(id,
         "No data available for selected combination"
       ))
       if (hasData(selectedConceptSets())) {
-        if (length(getResolvedAndMappedConceptIdsForFilters()) > 0) {
+        if (length(getFilteredConceptIds()) > 0) {
           data <- data %>%
-            dplyr::filter(.data$conceptId %in% getResolvedAndMappedConceptIdsForFilters())
+            dplyr::filter(.data$conceptId %in% getFilteredConceptIds())
         }
       }
       validate(need(
@@ -149,7 +215,7 @@ conceptsInDataSourceModule <- function(id,
       displayTable <- getDisplayTableGroupedByDatabaseId(
         data = data,
         cohort = cohortTable,
-        database = databaseTable,
+        databaseTable = databaseTable,
         headerCount = countsForHeader,
         keyColumns = keyColumnFields,
         countLocation = countLocation,

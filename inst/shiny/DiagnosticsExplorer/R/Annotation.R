@@ -19,77 +19,60 @@ annotationUi <- function(id) {
   ns <- shiny::NS(id)
 
   postAnnotationArea <- shiny::conditionalPanel(
-        condition = "output.postAnnotationEnabled == true",
-        ns = ns,
-        shinydashboard::box(
-          title = "Add comment",
-          width = NULL,
-          collapsible = TRUE,
-          collapsed = TRUE,
-          column(
-            5,
-            shinyWidgets::pickerInput(
-              inputId = ns("database"),
-              label = "Related Database:",
-              width = 300,
-              choices = c(""),
-              selected = c(""),
-              multiple = TRUE,
-              inline = TRUE,
-              choicesOpt = list(style = rep_len("color: black;", 999)),
-              options = shinyWidgets::pickerOptions(
-                actionsBox = TRUE,
-                liveSearch = TRUE,
-                size = 10,
-                liveSearchStyle = "contains",
-                liveSearchPlaceholder = "Type here to search",
-                virtualScroll = 50
-              )
-            )
-          ),
-          column(
-            5,
-            shinyWidgets::pickerInput(
-              inputId = ns("targetCohort"),
-              label = "Related Cohorts",
-              width = 300,
-              choices = c(""),
-              selected = c(""),
-              multiple = TRUE,
-              inline = TRUE,
-              choicesOpt = list(style = rep_len("color: black;", 999)),
-              options = shinyWidgets::pickerOptions(
-                actionsBox = TRUE,
-                liveSearch = TRUE,
-                liveSearchStyle = "contains",
-                size = 10,
-                dropupAuto = TRUE,
-                liveSearchPlaceholder = "Type here to search",
-                virtualScroll = 50
-              )
-            )
-          ),
-          column(
-            11,
-            markdownInput::markdownInput(
-              inputId = ns("markdownInputArea"),
-              label = "Comment : ",
-              theme = "github",
-              value = "Write some _markdown_ **here:**"
-            )
-          ),
-          column(
-            1,
-            tags$br(),
-            shiny::actionButton(
-              inputId = ns("postAnnotation"),
-              label = "POST",
-              width = NULL,
-              style = "margin-top: 15px; margin-bottom: 15px;"
-            )
+    condition = "output.postAnnotationEnabled == true",
+    ns = ns,
+    shinydashboard::box(
+      title = "Add comment",
+      width = NULL,
+      collapsible = TRUE,
+      collapsed = TRUE,
+      column(
+        5,
+        shiny::uiOutput(ns("databasePicker"))
+      ),
+      column(
+        5,
+        shinyWidgets::pickerInput(
+          inputId = ns("targetCohort"),
+          label = "Related Cohorts",
+          width = 300,
+          choices = c(""),
+          selected = c(""),
+          multiple = TRUE,
+          inline = TRUE,
+          choicesOpt = list(style = rep_len("color: black;", 999)),
+          options = shinyWidgets::pickerOptions(
+            actionsBox = TRUE,
+            liveSearch = TRUE,
+            liveSearchStyle = "contains",
+            size = 10,
+            dropupAuto = TRUE,
+            liveSearchPlaceholder = "Type here to search",
+            virtualScroll = 50
           )
         )
+      ),
+      column(
+        11,
+        markdownInput::markdownInput(
+          inputId = ns("markdownInputArea"),
+          label = "Comment : ",
+          theme = "github",
+          value = "Write some _markdown_ **here:**"
+        )
+      ),
+      column(
+        1,
+        tags$br(),
+        shiny::actionButton(
+          inputId = ns("postAnnotation"),
+          label = "POST",
+          width = NULL,
+          style = "margin-top: 15px; margin-bottom: 15px;"
+        )
       )
+    )
+  )
 
   return(
     shinydashboard::box(
@@ -128,8 +111,10 @@ annotationModule <- function(id,
                              selectedDatabaseIds,
                              selectedCohortIds,
                              cohortTable,
+                             databaseTable,
                              postAnnotaionEnabled) {
   ns <- shiny::NS(id)
+
   annotationServer <- function(input, output, session) {
     # Annotation Section ------------------------------------
     ## posting annotation enabled ------
@@ -143,8 +128,8 @@ annotationModule <- function(id,
 
     inputCohortIds <- shiny::reactive({
       cohortTable %>%
-        dplyr::filter(.data$compoundName %in% selectedCohortIds()) %>%
-        dplyr::pull(.data$cohortId)
+        dplyr::filter(compoundName %in% selectedCohortIds()) %>%
+        dplyr::pull(cohortId)
     })
 
     getAnnotationReactive <- shiny::reactive({
@@ -156,7 +141,7 @@ annotationModule <- function(id,
         databaseIds = selectedDatabaseIds()
       )
 
-      if (nrow(results$annotation) == 0) {
+      if (!hasData(results)) {
         return(NULL)
       }
       return(results)
@@ -164,12 +149,34 @@ annotationModule <- function(id,
 
     markdownModule <- shiny::callModule(markdownInput::moduleMarkdownInput, "markdownInputArea")
 
-    shiny::observe({
-      shinyWidgets::updatePickerInput(
-        session = session,
-        inputId = "database",
-        choices = selectedDatabaseIds(),
-        selected = selectedDatabaseIds()
+    dbChoices <- shiny::reactive({
+      databaseChoices <- list()
+      dbMapping <- databaseTable %>% dplyr::filter(databaseId %in% selectedDatabaseIds())
+      for (i in 1:nrow(dbMapping)) {
+        row <- dbMapping[i,]
+        databaseChoices[row$databaseName] <- row$databaseId
+      }
+      return(databaseChoices)
+    })
+
+    output$databasePicker <- shiny::renderUI({
+      shinyWidgets::pickerInput(
+        inputId = ns("database"),
+        label = "Related Database:",
+        width = 300,
+        choices = dbChoices(),
+        selected = dbChoices(),
+        multiple = TRUE,
+        inline = TRUE,
+        choicesOpt = list(style = rep_len("color: black;", 999)),
+        options = shinyWidgets::pickerOptions(
+          actionsBox = TRUE,
+          liveSearch = TRUE,
+          size = 10,
+          liveSearchStyle = "contains",
+          liveSearchPlaceholder = "Type here to search",
+          virtualScroll = 50
+        )
       )
     })
 
@@ -200,14 +207,14 @@ annotationModule <- function(id,
           dplyr::mutate(
             Annotation = paste0(
               "<b>",
-              .data$createdBy,
+              createdBy,
               "@",
-              getTimeFromInteger(.data$createdOn),
+              getTimeFromInteger(createdOn),
               ":</b>",
-              .data$annotation
+              annotation
             )
           ) %>%
-          dplyr::select(.data$annotationId, .data$Annotation)
+          dplyr::select(annotationId, Annotation)
 
         reactable::reactable(
           data,
@@ -217,18 +224,18 @@ annotationModule <- function(id,
           ),
           details = function(index) {
             subTable <- results$annotationLink %>%
-              dplyr::filter(.data$annotationId == data[index,]$annotationId) %>%
+              dplyr::filter(annotationId == data[index,]$annotationId) %>%
               dplyr::inner_join(cohortTable %>%
                                   dplyr::select(
-                                    .data$cohortId,
-                                    .data$cohortName
+                                    cohortId,
+                                    cohortName
                                   ),
                                 by = "cohortId"
               )
             distinctCohortName <- subTable %>%
-              dplyr::distinct(.data$cohortName)
+              dplyr::distinct(cohortName)
             distinctDatabaseId <- subTable %>%
-              dplyr::distinct(.data$databaseId)
+              dplyr::distinct(databaseId)
 
             htmltools::div(
               style = "margin:0;padding:0;padding-left:50px;",
@@ -281,7 +288,9 @@ annotationModule <- function(id,
         parametersToPostAnnotation <- getParametersToPostAnnotation()
         comment <- markdownModule()
 
-        if (comment == "Write some _markdown_ **here:**" | is.null(comment) | is.null(activeLoggedInUser())) {
+        if (comment == "Write some _markdown_ **here:**" |
+          is.null(comment) |
+          is.null(activeLoggedInUser())) {
           return(NULL)
         }
         createdBy <- activeLoggedInUser()
@@ -326,18 +335,20 @@ postAnnotationResult <- function(dataSource,
                                                           	deleted_on,
                                                           	annotation
                                                           	)
+                SELECT annotation_id,
+                	'@created_by' created_by,
+                	@created_on created_on,
+                	{@modified_last_on == ''} ? {NULL} : {@modified_last_on} modified_last_on,
+                	{@deleted_on == ''} ? {NULL} : {@deleted_on} deleted_on,
+                	'@annotation' annotation
+                FROM (
                 SELECT CASE
                 		WHEN max(annotation_id) IS NULL
                 			THEN 1
                 		ELSE max(annotation_id) + 1
-                		END AS annotation_id,
-                	'@created_by' created_by,
-                	@created_on created_on,
-                	@modified_last_on modified_last_on,
-                	@deleted_on deleted_on,
-                	'@annotation' annotation
-                FROM @results_database_schema.annotation;"
-
+                		END AS annotation_id
+                FROM @results_database_schema.annotation
+              ) F;"
   tryCatch(
   {
     renderTranslateExecuteSql(
@@ -369,7 +380,9 @@ postAnnotationResult <- function(dataSource,
       results_database_schema = dataSource$resultsDatabaseSchema,
       created_by = createdBy,
       created_on = createdOn
-    ) %>% dplyr::pull()
+    )
+
+  maxAnnotationId <- maxAnnotationId$annotation_id
 
   # insert annotation link
   annotationLink <-
@@ -400,42 +413,47 @@ getAnnotationResult <- function(dataSource,
                                 diagnosticsId,
                                 cohortIds,
                                 databaseIds) {
-  # get annotation id's
-  sqlRetrieveAnnotationLink <- "SELECT *
+  data <- NULL
+  annotationLink <- NULL
+  if (hasData(cohortIds) & hasData(databaseIds)) {
+    # get annotation id's
+    sqlRetrieveAnnotationLink <- "SELECT *
                                 FROM @results_database_schema.annotation_link
                                 WHERE diagnostics_id = '@diagnosticsId'
                                 	AND cohort_id IN (@cohortIds)
                                   AND database_id IN (@databaseIds);"
-  annotationLink <-
-    renderTranslateQuerySql(
-      connection = dataSource$connection,
-      dbms = dataSource$dbms,
-      sql = sqlRetrieveAnnotationLink,
-      results_database_schema = dataSource$resultsDatabaseSchema,
-      diagnosticsId = diagnosticsId,
-      cohortIds = cohortIds,
-      databaseIds = quoteLiterals(databaseIds),
-      snakeCaseToCamelCase = TRUE
-    )
-
-  sqlRetrieveAnnotation <- "SELECT *
+    annotationLink <-
+      renderTranslateQuerySql(
+        connection = dataSource$connection,
+        dbms = dataSource$dbms,
+        sql = sqlRetrieveAnnotationLink,
+        results_database_schema = dataSource$resultsDatabaseSchema,
+        diagnosticsId = diagnosticsId,
+        cohortIds = cohortIds,
+        databaseIds = quoteLiterals(databaseIds),
+        snakeCaseToCamelCase = TRUE
+      )
+  }
+  if (hasData(annotationLink)) {
+    sqlRetrieveAnnotation <- "SELECT *
                             FROM @results_database_schema.annotation
                             WHERE annotation_id IN (@annotationIds);"
 
-  annotation <-
-    renderTranslateQuerySql(
-      connection = dataSource$connection,
-      dbms = dataSource$dbms,
-      sql = sqlRetrieveAnnotation,
-      results_database_schema = dataSource$resultsDatabaseSchema,
-      annotationIds = annotationLink$annotationId,
-      snakeCaseToCamelCase = TRUE
-    )
+    annotation <-
+      renderTranslateQuerySql(
+        connection = dataSource$connection,
+        dbms = dataSource$dbms,
+        sql = sqlRetrieveAnnotation,
+        results_database_schema = dataSource$resultsDatabaseSchema,
+        annotationIds = annotationLink$annotationId,
+        snakeCaseToCamelCase = TRUE
+      )
 
-  data <- list(
-    annotation = annotation,
-    annotationLink = annotationLink
-  )
+    if (hasData(annotation)) {
+      data <- list(annotation = annotation,
+                   annotationLink = annotationLink)
+    }
+  }
 
   return(data)
 }

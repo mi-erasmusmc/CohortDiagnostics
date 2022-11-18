@@ -22,6 +22,10 @@ loadResultsTable <- function(dataSource, tableName, required = FALSE, tablePrefi
     tolower(DatabaseConnector::dbListTables(dataSource$connection, schema = dataSource$resultsDatabaseSchema))
 
   if (required || selectTableName %in% resultsTablesOnServer) {
+    if (tableIsEmpty(dataSource, selectTableName)) {
+      return(NULL)
+    }
+
     tryCatch(
     {
       table <- DatabaseConnector::dbReadTable(
@@ -51,23 +55,27 @@ loadResultsTable <- function(dataSource, tableName, required = FALSE, tablePrefi
 
 # Create empty objects in memory for all other tables. This is used by the Shiny app to decide what tabs to show:
 tableIsEmpty <- function(dataSource, tableName) {
-  sql <-
-    sprintf(
-      "SELECT 1 FROM %s.%s LIMIT 1;",
-      dataSource$resultsDatabaseSchema,
-      tableName
-    )
-  oneRow <- DatabaseConnector::dbGetQuery(dataSource$connection, sql)
-  return(nrow(oneRow) == 0)
+  sql <- "SELECT * FROM @result_schema.@table LIMIT 1"
+  row <- data.frame()
+  tryCatch({
+    row <- renderTranslateQuerySql(dataSource$connection,
+                                   sql,
+                                   dataSource$dbms,
+                                   result_schema = dataSource$resultsDatabaseSchema,
+                                   table = tableName)
+  }, error = function(...) {
+    message("Table not found: ", tableName)
+  })
+
+  return(nrow(row) == 0)
 }
 
-getTimeAsInteger <- function(time = Sys.time(),
-                             tz = "UTC") {
-  return(as.numeric(as.POSIXlt(time, tz = tz)))
+getTimeAsInteger <- function(time = Sys.time()) {
+  return(floor(as.numeric(as.POSIXlt(time))))
 }
 
-getTimeFromInteger <- function(x, tz = "UTC") {
-  originDate <- as.POSIXct("1970-01-01", tz = tz)
+getTimeFromInteger <- function(x) {
+  originDate <- as.POSIXct("1970-01-01")
   originDate <- originDate + x
   return(originDate)
 }
@@ -75,27 +83,27 @@ getTimeFromInteger <- function(x, tz = "UTC") {
 processMetadata <- function(data) {
   data <- data %>%
     tidyr::pivot_wider(
-      id_cols = c(.data$startTime, .data$databaseId),
-      names_from = .data$variableField,
-      values_from = .data$valueField
+      id_cols = c(startTime, databaseId),
+      names_from = variableField,
+      values_from = valueField
     ) %>%
     dplyr::mutate(
       startTime = stringr::str_replace(
-        string = .data$startTime,
+        string = startTime,
         pattern = stringr::fixed("TM_"),
         replacement = ""
       )
     ) %>%
-    dplyr::mutate(startTime = paste0(.data$startTime, " ", .data$timeZone)) %>%
-    dplyr::mutate(startTime = as.POSIXct(.data$startTime)) %>%
+    dplyr::mutate(startTime = paste0(startTime, " ", timeZone)) %>%
+    dplyr::mutate(startTime = as.POSIXct(startTime)) %>%
     dplyr::group_by(
-      .data$databaseId,
-      .data$startTime
+      databaseId,
+      startTime
     ) %>%
-    dplyr::arrange(.data$databaseId, dplyr::desc(.data$startTime), .by_group = TRUE) %>%
+    dplyr::arrange(databaseId, dplyr::desc(startTime), .by_group = TRUE) %>%
     dplyr::mutate(rn = dplyr::row_number()) %>%
-    dplyr::filter(.data$rn == 1) %>%
-    dplyr::select(-.data$timeZone)
+    dplyr::filter(rn == 1) %>%
+    dplyr::select(-timeZone)
 
   if ("runTime" %in% colnames(data)) {
     data$runTime <- round(x = as.numeric(data$runTime), digits = 2)
@@ -144,7 +152,7 @@ processMetadata <- function(data) {
 checkErrorCohortIdsDatabaseIds <- function(errorMessage,
                                            cohortIds,
                                            databaseIds) {
-  checkmate::assertDouble(
+  checkmate::assertNumeric(
     x = cohortIds,
     null.ok = FALSE,
     lower = 1,
@@ -198,7 +206,8 @@ loadShinySettings <- function(configPath) {
     userCredentialsFile = "UserCredentials.csv",
     tablePrefix = "",
     cohortTableName = "cohort",
-    databaseTableName = "database"
+    databaseTableName = "database",
+    connectionEnvironmentVariables = NULL
   )
 
   for (key in names(defaultValues)) {
@@ -215,9 +224,37 @@ loadShinySettings <- function(configPath) {
     shinySettings$databaseTableName <- paste0(shinySettings$tablePrefix, shinySettings$databaseTableName)
   }
 
-
   if (!is.null(shinySettings$connectionDetailsSecureKey)) {
     shinySettings$connectionDetails <- jsonlite::fromJSON(keyring::key_get(shinySettings$connectionDetailsSecureKey))
+  } else if(!is.null(shinySettings$connectionEnvironmentVariables$server)) {
+
+    defaultValues <- list(
+      dbms = "",
+      user = "",
+      password = "",
+      port = "",
+      extraSettings = ""
+    )
+
+    for (key in names(defaultValues)) {
+      if (is.null(shinySettings$connectionEnvironmentVariables[[key]])) {
+        shinySettings$connectionEnvironmentVariables[[key]] <- defaultValues[[key]]
+      }
+    }
+
+    serverStr <- Sys.getenv(shinySettings$connectionEnvironmentVariables$server)
+    if (!is.null(shinySettings$connectionEnvironmentVariables$database)) {
+      serverStr <- paste0(serverStr, "/", Sys.getenv(shinySettings$connectionEnvironmentVariables$database))
+    }
+
+    shinySettings$connectionDetails <- list(
+      dbms = Sys.getenv(shinySettings$connectionEnvironmentVariables$dbms, unset = shinySettings$connectionDetails$dbms),
+      server = serverStr,
+      user = Sys.getenv(shinySettings$connectionEnvironmentVariables$user),
+      password = Sys.getenv(shinySettings$connectionEnvironmentVariables$password),
+      port = Sys.getenv(shinySettings$connectionEnvironmentVariables$port, unset = shinySettings$connectionDetails$port),
+      extraSettings = Sys.getenv(shinySettings$connectionEnvironmentVariables$extraSettings)
+    )
   }
   shinySettings$connectionDetails <- do.call(DatabaseConnector::createConnectionDetails,
                                              shinySettings$connectionDetails)
@@ -257,12 +294,11 @@ createDatabaseDataSource <- function(connection,
 #' Initialize variables required in applications global shared environment
 #' These settings are shared accross settings (e.g. accessed by all users) and should be read only during run time
 initializeEnvironment <- function(shinySettings,
-                                  table1SpecPath = "data/Table1SpecsLong.csv",
                                   dataModelSpecificationsPath = "data/resultsDataModelSpecification.csv",
                                   envir = .GlobalEnv) {
-
   envir$shinySettings <- shinySettings
-  envir$connectionPool <- envir$getConnectionPool(envir$shinySettings$connectionDetails)
+
+  envir$connectionPool <- getConnectionPool(envir$shinySettings$connectionDetails)
   shiny::onStop(function() {
     if (DBI::dbIsValid(envir$connectionPool)) {
       writeLines("Closing database pool")
@@ -271,7 +307,7 @@ initializeEnvironment <- function(shinySettings,
   })
 
   envir$dataSource <-
-    envir$createDatabaseDataSource(
+    createDatabaseDataSource(
       connection = envir$connectionPool,
       resultsDatabaseSchema = envir$shinySettings$resultsDatabaseSchema,
       vocabularyDatabaseSchema = envir$
@@ -284,12 +320,19 @@ initializeEnvironment <- function(shinySettings,
     )
 
   envir$userCredentials <- data.frame()
+  envir$enableAuthorization <- envir$shinySettings$enableAuthorization
+  if (is.null(envir$enableAuthorization)) {
+    envir$enableAuthorization <- FALSE
+  }
+
   if (envir$enableAuthorization & !is.null(envir$shinySettings$userCredentialsFile)) {
     if (file.exists(envir$shinySettings$userCredentialsFile)) {
       envir$userCredentials <-
         readr::read_csv(file = envir$shinySettings$userCredentialsFile, col_types = readr::cols())
     }
   }
+
+  envir$enableAnnotation <- envir$shinySettings$enableAnnotation
 
   if (nrow(envir$userCredentials) == 0) {
     envir$enableAuthorization <- FALSE
@@ -319,18 +362,18 @@ initializeEnvironment <- function(shinySettings,
 
   if (!is.null(envir$cohort)) {
     if ("cohortDefinitionId" %in% names(envir$cohort)) {
-      envir$cohort <- envir$cohort %>% dplyr::mutate(cohortId = .data$cohortDefinitionId)
+      envir$cohort <- envir$cohort %>% dplyr::mutate(cohortId = cohortDefinitionId)
 
       ## Note this is because the tables were labled wrong!
-      envir$cohort <- envir$cohort %>% dplyr::mutate(cohortId = .data$cohortDefinitionId,
-                                                     sql = .data$json,
-                                                     json = .data$sqlCommand)
+      envir$cohort <- envir$cohort %>% dplyr::mutate(cohortId = cohortDefinitionId,
+                                                     sql = json,
+                                                     json = sqlCommand)
     }
 
     envir$cohort <- envir$cohort %>%
-      dplyr::arrange(.data$cohortId) %>%
-      dplyr::mutate(shortName = paste0("C", .data$cohortId)) %>%
-      dplyr::mutate(compoundName = paste0(.data$shortName, ": ", .data$cohortName))
+      dplyr::arrange(cohortId) %>%
+      dplyr::mutate(shortName = paste0("C", cohortId)) %>%
+      dplyr::mutate(compoundName = paste0(shortName, ": ", cohortName))
   }
 
   if (!is.null(envir$database)) {
@@ -338,12 +381,12 @@ initializeEnvironment <- function(shinySettings,
       "vocabularyVersion" %in% colnames(envir$database)) {
       envir$database <- envir$database %>%
         dplyr::mutate(
-          databaseIdWithVocabularyVersion = paste0(.data$databaseId, " (", .data$vocabularyVersion, ")")
+          databaseIdWithVocabularyVersion = paste0(databaseId, " (", .data$vocabularyVersion, ")")
         )
     }
 
     envir$databaseMetadata <- processMetadata(envir$metadata)
-    envir$database <- envir$database %>%
+    envir$databaseMetadata <- envir$database %>%
       dplyr::distinct() %>%
       dplyr::mutate(id = dplyr::row_number()) %>%
       dplyr::mutate(shortName = paste0("D", .data$id)) %>%
@@ -396,6 +439,7 @@ initializeEnvironment <- function(shinySettings,
       dplyr::pull(.data$domainId) %>%
       unique() %>%
       sort()
+
     envir$analysisNameOptions <- envir$temporalAnalysisRef %>%
       dplyr::select(.data$analysisName) %>%
       dplyr::pull(.data$analysisName) %>%
@@ -403,8 +447,8 @@ initializeEnvironment <- function(shinySettings,
       sort()
   }
 
-  envir$resultsTables <- tolower(DatabaseConnector::dbListTables(dataSource$connection,
-                                                                 schema = dataSource$resultsDatabaseSchema))
+  envir$resultsTables <- tolower(DatabaseConnector::dbListTables(envir$dataSource$connection,
+                                                                 schema = envir$dataSource$resultsDatabaseSchema))
   envir$enabledTabs <- c()
   for (table in envir$dataModelSpecifications$tableName %>% unique()) {
     if (envir$dataSource$prefixTable(table) %in% envir$resultsTables) {
@@ -420,33 +464,12 @@ initializeEnvironment <- function(shinySettings,
 
   envir$enabledTabs <- c(envir$enabledTabs, "database", "cohort")
 
-  envir$prettyTable1Specifications <- readr::read_csv(
-    file = table1SpecPath,
-    col_types = readr::cols(),
-    guess_max = min(1e7),
-    lazy = FALSE
-  )
-
-  envir$analysisIdInCohortCharacterization <- c(
-    1, 3, 4, 5, 6, 7,
-    203, 403, 501, 703,
-    801, 901, 903, 904,
-    -301, -201
-  )
-
-  envir$analysisIdInTemporalCharacterization <- c(
-    101, 401, 501, 701,
-    -301, -201
-  )
-
-  if (envir$shinySettings$enableAnnotation &
+  if (envir$enableAnnotation &
     "annotation" %in% envir$resultsTables &
     "annotation_link" %in% envir$resultsTables &
     "annotation_attributes" %in% envir$resultsTables) {
     envir$showAnnotation <- TRUE
     envir$enableAnnotation <- TRUE
-    envir$enableAuthorization <- TRUE
-    options("showDiagnosticsExplorerAnnotation" = TRUE)
   } else {
     envir$enableAnnotation <- FALSE
     envir$showAnnotation <- FALSE
