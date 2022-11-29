@@ -180,10 +180,10 @@ runCohortTimeSeriesDiagnostics <- function(connectionDetails = NULL,
   )
 
   tsSetUpSql <- "-- #time_series
-                DROP TABLE IF EXISTS #time_series;
-                DROP TABLE IF EXISTS #c_time_series1;
-                DROP TABLE IF EXISTS #c_time_series2;
-                DROP TABLE IF EXISTS #c_time_series3;"
+                IF OBJECT_ID('#time_series', 'U') IS NOT NULL DROP TABLE #time_series;
+                IF OBJECT_ID('#c_time_series1', 'U') IS NOT NULL DROP TABLE #c_time_series1;
+                IF OBJECT_ID('#c_time_series2', 'U') IS NOT NULL DROP TABLE #c_time_series2;
+                IF OBJECT_ID('#c_time_series3', 'U') IS NOT NULL DROP TABLE #c_time_series3;"
 
   ParallelLogger::logTrace(" - Dropping any time_series temporary tables that maybe present at start up.")
   DatabaseConnector::renderTranslateExecuteSql(
@@ -211,7 +211,7 @@ runCohortTimeSeriesDiagnostics <- function(connectionDetails = NULL,
   ParallelLogger::logTrace(" - Beginning time series SQL")
 
   sqlCohortDrop <-
-    "DROP TABLE IF EXISTS #cohort_ts;"
+    "IF OBJECT_ID('#cohort_ts', 'U') IS NOT NULL DROP TABLE #cohort_ts;"
   ParallelLogger::logTrace("   - Dropping any cohort temporary tables used by time series")
   DatabaseConnector::renderTranslateExecuteSql(
     connection = connection,
@@ -219,9 +219,9 @@ runCohortTimeSeriesDiagnostics <- function(connectionDetails = NULL,
     progressBar = FALSE,
     reportOverallTime = FALSE
   )
-  sqlCohort <- "DROP TABLE IF EXISTS #ts_cohort;
-                DROP TABLE IF EXISTS #ts_cohort_first;
-                DROP TABLE IF EXISTS #ts_output;
+  sqlCohort <- "IF OBJECT_ID('#ts_cohort', 'U') IS NOT NULL DROP TABLE #ts_cohort;
+                IF OBJECT_ID('#ts_cohort_first', 'U') IS NOT NULL DROP TABLE #ts_cohort_first;
+                IF OBJECT_ID('#ts_output', 'U') IS NOT NULL DROP TABLE #ts_output;
 
                 --HINT DISTRIBUTE_ON_KEY(subject_id)
                 SELECT *
@@ -258,8 +258,8 @@ runCohortTimeSeriesDiagnostics <- function(connectionDetails = NULL,
                 INNER JOIN @cdm_database_schema.concept
                 	ON p.gender_concept_id = concept.concept_id};
 
-                DROP TABLE IF EXISTS #ts_cohort;
-                DROP TABLE IF EXISTS #ts_cohort_first;"
+                IF OBJECT_ID('#ts_cohort', 'U') IS NOT NULL DROP TABLE #ts_cohort;
+                IF OBJECT_ID('#ts_cohort_first', 'U') IS NOT NULL DROP TABLE #ts_cohort_first;"
 
   if (runCohortTimeSeries) {
     ParallelLogger::logTrace("   - Creating cohort table copy for time series")
@@ -474,7 +474,7 @@ runCohortTimeSeriesDiagnostics <- function(connectionDetails = NULL,
   ParallelLogger::logTrace(" - Dropping any time_series temporary tables at clean up")
   DatabaseConnector::renderTranslateExecuteSql(
     connection = connection,
-    sql = "DROP TABLE IF EXISTS #calendar_periods;",
+    sql = "IF OBJECT_ID('#calendar_periods', 'U') IS NOT NULL DROP TABLE #calendar_periods;",
     progressBar = FALSE,
     reportOverallTime = FALSE
   )

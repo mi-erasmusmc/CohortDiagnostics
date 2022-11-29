@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS #target_cohort_table;
-DROP TABLE IF EXISTS #cohort_rel_output;
+IF OBJECT_ID('#target_cohort_table', 'U') IS NOT NULL DROP TABLE #target_cohort_table;
+IF OBJECT_ID('#cohort_rel_output', 'U') IS NOT NULL DROP TABLE #cohort_rel_output;
 
 -- target cohort: cohort relationship uses the first occurrence 
 SELECT cohort_definition_id,
@@ -277,4 +277,4 @@ WHERE t.cohort_definition_id IN (@target_cohort_ids)
 GROUP BY t.cohort_definition_id,
 	c.cohort_definition_id;
 
-DROP TABLE IF EXISTS #target_cohort_table;
+IF OBJECT_ID('#target_cohort_table', 'U') IS NOT NULL DROP TABLE #target_cohort_table;
