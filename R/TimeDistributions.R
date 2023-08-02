@@ -54,14 +54,19 @@ getTimeDistributions <- function(connectionDetails = NULL,
   } else {
     result <- data$covariatesContinuous %>%
       dplyr::inner_join(data$covariateRef, by = "covariateId") %>%
+      # dplyr::select(
+      #   -.data$conceptId,
+      #   -.data$analysisId,
+      #   -.data$covariateId,
+      #   -.data$result$countValue
+      # ) %>%
       dplyr::select(
-        -.data$conceptId,
-        -.data$analysisId,
-        -.data$covariateId,
-        -.data$result$countValue
+        -conceptId,
+        -analysisId,
+        -covariateId
       ) %>%
-      dplyr::rename(timeMetric = .data$covariateName,
-                    cohortId = .data$cohortDefinitionId) %>%
+      dplyr::rename(timeMetric = covariateName,
+                    cohortId = cohortDefinitionId) %>%
       dplyr::collect()
   }
   attr(result, "cohortSize") <- data$metaData$populationSize
