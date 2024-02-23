@@ -82,17 +82,11 @@ getDefaultCovariateSettings <- function() {
   )
 }
 
-#' Execute cohort diagnostics
-#'
+
+#' Create Execution Settings
 #' @description
-#' Runs the cohort diagnostics on all (or a subset of) the cohorts instantiated using the
-#' Assumes the cohorts have already been instantiated. with the CohortGenerator package
-#'
-#' Characterization:
-#' If runTemporalCohortCharacterization argument is TRUE, then the following default covariateSettings object will be created
-#' using \code{RFeatureExtraction::createTemporalCovariateSettings}
-#' Alternatively, a covariate setting object may be created using the above as an example.
-#'
+#' Create an execution settings object
+#' @export
 #' @template Connection
 #'
 #' @template CdmDatabaseSchema
@@ -152,7 +146,6 @@ getDefaultCovariateSettings <- function() {
 #'                                   This expression can use the variables 'cohortId' and 'seed'.
 #'                                   Default is "cohortId * 1000 + seed", which ensures unique identifiers
 #'                                   as long as there are fewer than 1000 cohorts.
-
 #' @examples
 #' \dontrun{
 #' # Load cohorts (assumes that they have already been instantiated)
@@ -166,7 +159,7 @@ getDefaultCovariateSettings <- function() {
 #'   password = "secure"
 #' )
 #'
-#' executeDiagnostics(
+#' executionSettings <- createExecutionSettings(
 #'   cohorts = cohorts,
 #'   exportFolder = "export",
 #'   cohortTableNames = cohortTableNames,
@@ -175,89 +168,48 @@ getDefaultCovariateSettings <- function() {
 #'   databaseId = "mySpecialCdm",
 #'   connectionDetails = connectionDetails
 #' )
-#'
-#' # Use a custom set of cohorts defined in a data.frame
-#' cohorts <- data.frame(
-#'   cohortId = c(100),
-#'   cohortName = c("Cohort Name"),
-#'   logicDescription = c("My Cohort"),
-#'   sql = c(readLines("path_to.sql")),
-#'   json = c(readLines("path_to.json"))
-#' )
-#' executeDiagnostics(
-#'   cohorts = cohorts,
-#'   exportFolder = "export",
-#'   cohortTable = "cohort",
-#'   cohortDatabaseSchema = "results",
-#'   cdmDatabaseSchema = "cdm",
-#'   databaseId = "mySpecialCdm",
-#'   connectionDetails = connectionDetails
-#' )
-#' }
-#'
-#' @importFrom CohortGenerator getCohortTableNames
-#' @importFrom tidyr any_of
-#' @export
-executeDiagnostics <- function(cohortDefinitionSet,
-                               exportFolder,
-                               databaseId,
-                               cohortDatabaseSchema,
-                               databaseName = NULL,
-                               databaseDescription = NULL,
-                               connectionDetails = NULL,
-                               connection = NULL,
-                               cdmDatabaseSchema,
-                               tempEmulationSchema = getOption("sqlRenderTempEmulationSchema"),
-                               cohortTable = "cohort",
-                               cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = cohortTable),
-                               vocabularyDatabaseSchema = cdmDatabaseSchema,
-                               cohortIds = NULL,
-                               cdmVersion = 5,
-                               runInclusionStatistics = TRUE,
-                               runIncludedSourceConcepts = TRUE,
-                               runOrphanConcepts = TRUE,
-                               runTimeSeries = FALSE,
-                               runVisitContext = TRUE,
-                               runBreakdownIndexEvents = TRUE,
-                               runIncidenceRate = TRUE,
-                               runCohortRelationship = TRUE,
-                               runTemporalCohortCharacterization = TRUE,
-                               temporalCovariateSettings = getDefaultCovariateSettings(),
-                               minCellCount = 5,
-                               minCharacterizationMean = 0.01,
-                               irWashoutPeriod = 0,
-                               incremental = FALSE,
-                               incrementalFolder = file.path(exportFolder, "incremental"),
-                               runOnSample = FALSE,
-                               sampleN = 1000,
-                               seed = 64374,
-                               seedArgs = NULL,
-                               sampleIdentifierExpression = "cohortId * 1000 + seed") {
-  # collect arguments that were passed to cohort diagnostics at initiation
-  callingArgs <- formals(executeDiagnostics)
-  callingArgsJson <-
-    list(
-      runInclusionStatistics = callingArgs$runInclusionStatistics,
-      runIncludedSourceConcepts = callingArgs$runIncludedSourceConcepts,
-      runOrphanConcepts = callingArgs$runOrphanConcepts,
-      runTimeSeries = callingArgs$runTimeSeries,
-      runVisitContext = callingArgs$runVisitContext,
-      runBreakdownIndexEvents = callingArgs$runBreakdownIndexEvents,
-      runIncidenceRate = callingArgs$runIncidenceRate,
-      runTemporalCohortCharacterization = callingArgs$runTemporalCohortCharacterization,
-      minCellCount = callingArgs$minCellCount,
-      minCharacterizationMean = callingArgs$minCharacterizationMean,
-      incremental = callingArgs$incremental,
-      temporalCovariateSettings = callingArgs$temporalCovariateSettings
-    ) %>%
-    RJSONIO::toJSON(digits = 23, pretty = TRUE)
+#' executeDiagnostics(executionSettings = executionSettings)
+#'}
+createExecutionSettings <- function(cohortDefinitionSet,
+                                    exportFolder,
+                                    databaseId,
+                                    cohortDatabaseSchema,
+                                    databaseName = NULL,
+                                    databaseDescription = NULL,
+                                    connectionDetails = NULL,
+                                    connection = NULL,
+                                    cdmDatabaseSchema,
+                                    tempEmulationSchema = getOption("sqlRenderTempEmulationSchema"),
+                                    cohortTable = "cohort",
+                                    cohortTableNames = CohortGenerator::getCohortTableNames(cohortTable = cohortTable),
+                                    vocabularyDatabaseSchema = cdmDatabaseSchema,
+                                    cohortIds = NULL,
+                                    cdmVersion = 5,
+                                    runInclusionStatistics = TRUE,
+                                    runIncludedSourceConcepts = TRUE,
+                                    runOrphanConcepts = TRUE,
+                                    runTimeSeries = FALSE,
+                                    runVisitContext = TRUE,
+                                    runBreakdownIndexEvents = TRUE,
+                                    runIncidenceRate = TRUE,
+                                    runCohortRelationship = TRUE,
+                                    runTemporalCohortCharacterization = TRUE,
+                                    temporalCovariateSettings = getDefaultCovariateSettings(),
+                                    minCellCount = 5,
+                                    minCharacterizationMean = 0.01,
+                                    irWashoutPeriod = 0,
+                                    incremental = FALSE,
+                                    incrementalFolder = file.path(exportFolder, "incremental"),
+                                    runOnSample = FALSE,
+                                    sampleN = 1000,
+                                    seed = 64374,
+                                    seedArgs = NULL,
+                                    sampleIdentifierExpression = "cohortId * 1000 + seed") {
 
+  # collect arguments that were passed to cohort diagnostics at initiation
   exportFolder <- normalizePath(exportFolder, mustWork = FALSE)
   incrementalFolder <- normalizePath(incrementalFolder, mustWork = FALSE)
   executionTimePath <- file.path(exportFolder, "taskExecutionTimes.csv")
-
-  start <- Sys.time()
-  ParallelLogger::logInfo("Run Cohort Diagnostics started at ", start)
 
   databaseId <- as.character(databaseId)
 
@@ -271,25 +223,25 @@ executeDiagnostics <- function(cohortDefinitionSet,
   errorMessage <- checkmate::makeAssertCollection()
   checkmate::assertList(cohortTableNames, null.ok = FALSE, types = "character", add = errorMessage, names = "named")
   checkmate::assertNames(names(cohortTableNames),
-    must.include = c(
-      "cohortTable",
-      "cohortInclusionTable",
-      "cohortInclusionResultTable",
-      "cohortInclusionStatsTable",
-      "cohortSummaryStatsTable",
-      "cohortCensorStatsTable"
-    ),
-    add = errorMessage
+                         must.include = c(
+                           "cohortTable",
+                           "cohortInclusionTable",
+                           "cohortInclusionResultTable",
+                           "cohortInclusionStatsTable",
+                           "cohortSummaryStatsTable",
+                           "cohortCensorStatsTable"
+                         ),
+                         add = errorMessage
   )
   checkmate::assertDataFrame(cohortDefinitionSet, add = errorMessage)
   checkmate::assertNames(names(cohortDefinitionSet),
-    must.include = c(
-      "json",
-      "cohortId",
-      "cohortName",
-      "sql"
-    ),
-    add = errorMessage
+                         must.include = c(
+                           "json",
+                           "cohortId",
+                           "cohortName",
+                           "sql"
+                         ),
+                         add = errorMessage
   )
 
   cohortTable <- cohortTableNames$cohortTable
@@ -355,14 +307,6 @@ executeDiagnostics <- function(cohortDefinitionSet,
       name = exportFolder,
       errorMessage = errorMessage
     )
-
-  ParallelLogger::addDefaultFileLogger(file.path(exportFolder, "log.txt"))
-  ParallelLogger::addDefaultErrorReportLogger(file.path(exportFolder, "errorReportR.txt"))
-  on.exit(ParallelLogger::unregisterLogger("DEFAULT_FILE_LOGGER", silent = TRUE))
-  on.exit(
-    ParallelLogger::unregisterLogger("DEFAULT_ERRORREPORT_LOGGER", silent = TRUE),
-    add = TRUE
-  )
 
 
   if (incremental) {
@@ -463,6 +407,7 @@ executeDiagnostics <- function(cohortDefinitionSet,
   }
 
   checkmate::reportAssertions(collection = errorMessage)
+
   if (!is.null(cohortIds)) {
     cohortDefinitionSet <- cohortDefinitionSet %>% dplyr::filter(.data$cohortId %in% cohortIds)
   }
@@ -474,17 +419,17 @@ executeDiagnostics <- function(cohortDefinitionSet,
     sort()
   cohortTableColumnNamesExpected <-
     getResultsDataModelSpecifications() %>%
-    dplyr::filter(.data$tableName == "cohort") %>%
-    dplyr::pull(.data$columnName) %>%
-    SqlRender::snakeCaseToCamelCase() %>%
-    sort()
+      dplyr::filter(.data$tableName == "cohort") %>%
+      dplyr::pull(.data$columnName) %>%
+      SqlRender::snakeCaseToCamelCase() %>%
+      sort()
   cohortTableColumnNamesRequired <-
     getResultsDataModelSpecifications() %>%
-    dplyr::filter(.data$tableName == "cohort") %>%
-    dplyr::filter(.data$isRequired == "Yes") %>%
-    dplyr::pull(.data$columnName) %>%
-    SqlRender::snakeCaseToCamelCase() %>%
-    sort()
+      dplyr::filter(.data$tableName == "cohort") %>%
+      dplyr::filter(.data$isRequired == "Yes") %>%
+      dplyr::pull(.data$columnName) %>%
+      SqlRender::snakeCaseToCamelCase() %>%
+      sort()
 
   expectedButNotObsevered <-
     setdiff(x = cohortTableColumnNamesExpected, y = cohortTableColumnNamesObserved)
@@ -511,6 +456,120 @@ executeDiagnostics <- function(cohortDefinitionSet,
     )
   }
 
+  executionSettings <- list(covariateValueFileName = file.path(exportFolder, "temporal_covariate_value.csv"),
+                            covariateValueContFileName = file.path(exportFolder, "temporal_covariate_value_dist.csv"),
+                            covariateRefFileName = file.path(exportFolder, "temporal_covariate_ref.csv"),
+                            analysisRefFileName = file.path(exportFolder, "temporal_analysis_ref.csv"),
+                            timeRefFileName = file.path(exportFolder, "temporal_time_ref.csv"),
+                            executionTimePath = executionTimePath)
+
+  lapply(names(formals(createExecutionSettings)), function(name) {
+    executionSettings[[name]] <<- base::get(name)
+  })
+
+  callingArgs <- formals(createExecutionSettings)
+  executionSettings$callingArgsJson <-
+    list(
+      runInclusionStatistics = callingArgs$runInclusionStatistics,
+      runIncludedSourceConcepts = callingArgs$runIncludedSourceConcepts,
+      runOrphanConcepts = callingArgs$runOrphanConcepts,
+      runTimeSeries = callingArgs$runTimeSeries,
+      runVisitContext = callingArgs$runVisitContext,
+      runBreakdownIndexEvents = callingArgs$runBreakdownIndexEvents,
+      runIncidenceRate = callingArgs$runIncidenceRate,
+      runTemporalCohortCharacterization = callingArgs$runTemporalCohortCharacterization,
+      minCellCount = callingArgs$minCellCount,
+      minCharacterizationMean = callingArgs$minCharacterizationMean,
+      incremental = callingArgs$incremental,
+      temporalCovariateSettings = callingArgs$temporalCovariateSettings
+    ) %>%
+      RJSONIO::toJSON(digits = 23, pretty = TRUE)
+
+  class(executionSettings) <- "CohortDiagnosticsExecutionSettings"
+  return(executionSettings)
+}
+
+
+#' Execute cohort diagnostics
+#'
+#' @description
+#' Runs the cohort diagnostics on all (or a subset of) the cohorts instantiated using the
+#' Assumes the cohorts have already been instantiated. with the CohortGenerator package
+#'
+#' Characterization:
+#' If runTemporalCohortCharacterization argument is TRUE, then the following default covariateSettings object will be created
+#' using \code{RFeatureExtraction::createTemporalCovariateSettings}
+#' Alternatively, a covariate setting object may be created using the above as an example.
+#' @param executionSettings     Execution settings or null (if null elipsis ... is used to call createExecutionSettings)
+#' @examples
+#' \dontrun{
+#' # Load cohorts (assumes that they have already been instantiated)
+#' cohortTableNames <- CohortGenerator::getCohortTableNames(cohortTable = "cohort")
+#' cohorts <- CohortGenerator::getCohortDefinitionSet(packageName = "MyGreatPackage")
+#' connectionDetails <- createConnectionDetails(
+#'   dbms = "postgresql",
+#'   server = "ohdsi.com",
+#'   port = 5432,
+#'   user = "me",
+#'   password = "secure"
+#' )
+#'
+#' executeDiagnostics(
+#'   cohorts = cohorts,
+#'   exportFolder = "export",
+#'   cohortTableNames = cohortTableNames,
+#'   cohortDatabaseSchema = "results",
+#'   cdmDatabaseSchema = "cdm",
+#'   databaseId = "mySpecialCdm",
+#'   connectionDetails = connectionDetails
+#' )
+#'
+#' # Use a custom set of cohorts defined in a data.frame
+#' cohorts <- data.frame(
+#'   cohortId = c(100),
+#'   cohortName = c("Cohort Name"),
+#'   logicDescription = c("My Cohort"),
+#'   sql = c(readLines("path_to.sql")),
+#'   json = c(readLines("path_to.json"))
+#' )
+#' executeDiagnostics(
+#'   cohorts = cohorts,
+#'   exportFolder = "export",
+#'   cohortTable = "cohort",
+#'   cohortDatabaseSchema = "results",
+#'   cdmDatabaseSchema = "cdm",
+#'   databaseId = "mySpecialCdm",
+#'   connectionDetails = connectionDetails
+#' )
+#' }
+#'
+#' @importFrom CohortGenerator getCohortTableNames
+#' @importFrom tidyr any_of
+#' @export
+executeDiagnostics <- function(executionSettings = NULL, ...) {
+  checkmate::assertClass(executionSettings, class = "CohortDiagnosticsExecutionSettings", null.ok = TRUE)
+
+  if (is.null(executionSettings)) {
+    executionSettings <- createExecutionSettings(...)
+  }
+
+  # Copy execution settings to function
+  pframe <- parent.frame()
+  for (name in names(executionSettings)) {
+    pframe[[name]] <- executionSettings[[name]]
+  }
+
+  ParallelLogger::addDefaultFileLogger(file.path(exportFolder, "log.txt"))
+  ParallelLogger::addDefaultErrorReportLogger(file.path(exportFolder, "errorReportR.txt"))
+  on.exit(ParallelLogger::unregisterLogger("DEFAULT_FILE_LOGGER", silent = TRUE))
+  on.exit(
+    ParallelLogger::unregisterLogger("DEFAULT_ERRORREPORT_LOGGER", silent = TRUE),
+    add = TRUE
+  )
+
+  start <- Sys.time()
+
+  ParallelLogger::logInfo("Run Cohort Diagnostics started at ", start)
   cohortDefinitionSet <- makeDataExportable(
     x = cohortDefinitionSet,
     tableName = "cohort",

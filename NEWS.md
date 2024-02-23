@@ -12,6 +12,8 @@ large cohort definitions
 
 4. Removed annotation tables from result schema script
 
+5. Added new function `createExecutionSettings` which creates an object of shared settings
+
 CohortDiagnostics 3.2.5
 =======================
 Bug Fixes:
