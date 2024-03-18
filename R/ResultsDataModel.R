@@ -120,23 +120,34 @@ createResultsDataModel <- function(connectionDetails = NULL,
 #' @export
 uploadResults <- function(connectionDetails,
                           schema,
-                          zipFileName,
+                          zipFileName = NULL,
+                          dataFolder = NULL,
                           forceOverWriteOfSpecifications = FALSE,
                           purgeSiteDataBeforeUploading = TRUE,
                           tempFolder = tempdir(),
                           tablePrefix = "",
                           ...) {
-  unzipFolder <- tempfile("unzipTempFolder", tmpdir = tempFolder)
-  dir.create(path = unzipFolder, recursive = TRUE)
-  on.exit(unlink(unzipFolder, recursive = TRUE), add = TRUE)
 
-  ParallelLogger::logInfo("Unzipping ", zipFileName)
-  zip::unzip(zipFileName, exdir = unzipFolder)
+  if (is.null(zipFileName) & is.null(dataFolder))
+    stop("Must specify output folder or zip")
+
+  if (!is.null(zipFileName)) {
+    unzipFolder <- tempfile("unzipTempFolder", tmpdir = tempFolder)
+    dir.create(path = unzipFolder, recursive = TRUE)
+    on.exit(unlink(unzipFolder, recursive = TRUE), add = TRUE)
+
+    ParallelLogger::logInfo("Unzipping ", zipFileName)
+    zip::unzip(zipFileName, exdir = unzipFolder)
+    dataFolder <- unzipFolder
+  } else {
+    if (!dir.exists(dataFolder))
+      stop("Cannot find data folder")
+  }
 
   ResultModelManager::uploadResults(
     connectionDetails = connectionDetails,
     schema = schema,
-    resultsFolder = unzipFolder,
+    resultsFolder = dataFolder,
     tablePrefix = tablePrefix,
     forceOverWriteOfSpecifications = forceOverWriteOfSpecifications,
     purgeSiteDataBeforeUploading = purgeSiteDataBeforeUploading,
@@ -165,10 +176,10 @@ migrateDataModel <- function(connectionDetails, databaseSchema, tablePrefix = ""
 
   ParallelLogger::logInfo("Updating version number")
   updateVersionSql <- SqlRender::loadRenderTranslateSql("UpdateVersionNumber.sql",
-    packageName = utils::packageName(),
-    database_schema = databaseSchema,
-    table_prefix = tablePrefix,
-    dbms = connectionDetails$dbms
+                                                        packageName = utils::packageName(),
+                                                        database_schema = databaseSchema,
+                                                        table_prefix = tablePrefix,
+                                                        dbms = connectionDetails$dbms
   )
 
   connection <- DatabaseConnector::connect(connectionDetails = connectionDetails)
@@ -196,4 +207,58 @@ getDataMigrator <- function(connectionDetails, databaseSchema, tablePrefix = "")
     migrationPath = "migrations",
     packageName = utils::packageName()
   )
+}
+
+# Extract all csv data from a database and dump to csv files
+extractCsvFromDb <- function(outputFolder,
+                             overwrite = FALSE,
+                             tablePrefix = "",
+                             sqliteDbPath = "MergedCohortDiagnosticsData.sqlite",
+                             databaseSchema = "main",
+                             connectionDetails = NULL) {
+
+  checkmate::assertClass(connectionDetails, "ConnectionDetails", null.ok = TRUE)
+
+  if (is.null(connectionDetails)) {
+    checkmate::assertFileExists(sqliteDbPath)
+    connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = "sqlite", server = sqliteDbPath)
+  }
+
+  if (dir.exists(outputFolder) & !overwrite) {
+    stop("Output directory exists. Use overwrite to continue")
+  }
+
+  dir.create(outputFolder, showWarnings = FALSE)
+
+  connection <- DatabaseConnector::connect(connectionDetails = connectionDetails)
+  on.exit(DatabaseConnector::disconnect(connection))
+  dataModel <- getResultsDataModelSpecifications()
+
+
+  writeData <- function(x, pos, tableName) {
+    # Hack to convert date types from sqlite
+    if (DatabaseConnector::dbms(connection) == "sqlite") {
+      colSpecs <- dataModel |>
+        dplyr::filter(.data$tableName == !!tableName,
+                      tolower(.data$dataType) == "date")
+
+      for (colname in colSpecs$columnName) {
+        x[[colname]] <- lubridate::as_date(lubridate::as_datetime(x[[colname]]))
+      }
+    }
+
+    fileName <- file.path(outputFolder, paste0(tableName, ".csv"))
+    readr::write_csv(x = x, file = fileName, append = pos != 1, na = '')
+    return(NULL)
+  }
+
+  for (table in unique(dataModel$tableName)) {
+    DatabaseConnector::renderTranslateQueryApplyBatched(connection = connection,
+                                                        sql = "SELECT * FROM @schema.@table_prefix@table",
+                                                        fun = writeData,
+                                                        table_prefix = tablePrefix,
+                                                        table = table,
+                                                        schema = databaseSchema,
+                                                        args = list(tableName = table))
+  }
 }
